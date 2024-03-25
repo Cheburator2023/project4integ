@@ -1,0 +1,51 @@
+FROM centos:7
+MAINTAINER d.kuklin
+
+RUN groupadd -g 1000 user && useradd -m -d /home/user -s /bin/bash -c "User for Integration service" -u 1000 -g 1000 user
+
+#RUN yum -y update && yum clean all
+RUN yum install vim wget curl sudo git python3 -y && yum clean all
+
+COPY requirements.txt /requirements.txt
+RUN pip3 install -r /requirements.txt
+# MLFlow build model method part:
+RUN pip3 install boto3 mlflow psycopg2-binary kafka-python
+RUN curl -fsSLO https://get.docker.com/builds/Linux/x86_64/docker-17.03.1-ce.tgz && tar --strip-components=1 -xvzf docker-17.03.1-ce.tgz -C /usr/local/bin
+
+USER user
+RUN mkdir /home/user/tmp && mkdir /home/user/integration
+WORKDIR /home/user/integration
+
+EXPOSE 5777
+
+# CMD ["gunicorn", "--workers", "5", "--bind", "0.0.0.0:5777", "wsgi:app"]
+
+# docker run -d --name integration -h integration -ti -p 5777:5777 -v /var/run/docker.sock:/var/run/docker.sock -v /app/integration/user:/home/user integration:v0 gunicorn --workers 5 --timeout 90 --bind 0.0.0.0:5777 -c /home/user/gunicorn.config.py --log-level DEBUG wsgi:app
+
+#CMD ["gunicorn", "--workers", "5", "--timeout", "90", "--bind", "0.0.0.0:5777", "-c", "/home/user/gunicorn.config.py", "--log-level", "DEBUG",  "wsgi:app"]
+CMD ["./run_service.sh"]
+FROM centos:7
+MAINTAINER d.kuklin
+
+RUN groupadd -g 1000 user && useradd -m -d /home/user -s /bin/bash -c "User for Integration service" -u 1000 -g 1000 user
+
+#RUN yum -y update && yum clean all
+RUN yum install vim wget curl sudo git python3 -y && yum clean all
+
+COPY requirements.txt /requirements.txt
+RUN pip3 install -r /requirements.txt
+# MLFlow build model method part:
+RUN pip3 install boto3 mlflow psycopg2-binary kafka-python
+RUN curl -fsSLO https://get.docker.com/builds/Linux/x86_64/docker-17.03.1-ce.tgz && tar --strip-components=1 -xvzf docker-17.03.1-ce.tgz -C /usr/local/bin
+
+USER user
+RUN mkdir /home/user/tmp && mkdir /home/user/integration
+WORKDIR /home/user/integration
+
+EXPOSE 5777
+
+# CMD ["gunicorn", "--workers", "5", "--bind", "0.0.0.0:5777", "wsgi:app"]
+
+# docker run -d --name integration -h integration -ti -p 5777:5777 -v /var/run/docker.sock:/var/run/docker.sock -v /app/integration/user:/home/user integration:v0 gunicorn --workers 5 --timeout 90 --bind 0.0.0.0:5777 -c /home/user/gunicorn.config.py --log-level DEBUG wsgi:app
+
+CMD ["gunicorn", "--workers", "5", "--timeout", "90", "--bind", "0.0.0.0:5777", "-c", "/home/user/gunicorn.config.py", "--log-level", "DEBUG",  "wsgi:app"]

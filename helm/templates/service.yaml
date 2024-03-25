@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "integration.fullname" . }}
+  labels: {{ include "integration.labels" . | nindent 4 }}
+spec:
+  ports:
+    - protocol: TCP
+      port: 5777
+      targetPort: 5777
+  selector:
+    app: {{ include "integration.fullname" . }}

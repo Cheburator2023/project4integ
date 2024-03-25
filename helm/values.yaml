@@ -1,0 +1,199 @@
+# Values for "integration" for ds1-lpad01 environment.
+
+replicaCount: 1
+pullSecret: ci-dos
+
+image:
+  repository: nexus-ci.corp.dev.vtb/sumd-docker-lib/os-integration
+  tag: v37-tc
+  pullPolicy: IfNotPresent
+
+secret_kafka: kafka-d5-client-sumd-integration
+secret_ssh_keys_bitbucket: ssh-keys-bitbucket
+
+resources:
+  requests:
+    cpu: "100m"
+    memory: "200Mi"
+  limits:
+    cpu: "100m"
+    memory: "200Mi"
+
+ingress:
+  enabled: true
+  annotations: {}
+    # kubernetes.io/ingress.class: nginx
+    # kubernetes.io/tls-acme: "true"
+  hosts:
+    - host: integration-ds1-lpad01-sumd-system.apps.ds1-lpad01.corp.dev.vtb
+      paths:
+        - pathType: ImplementationSpecific
+          backend:
+            service:
+              name: integration
+              port:
+                number: 5777
+  tls:
+    - secretName: ingress-tls
+      hosts:
+        - integration-ds1-lpad01-sumd-system.apps.ds1-lpad01.corp.dev.vtb
+
+rbac:
+  serviceAccount:
+    enabled: true
+    newEnabled: false
+    serviceAccountName: validation-service-account
+####Role и Rolebindings для SA validation-service-account на доступ к созданию Jobs в namespace *-validation создаются через заявку на поддержку Openshift
+  role:
+    enabled: false
+    roleName: validation-role
+    roleNamespace: ds1-lpad01-sumd-validation
+  roleBinding:
+    enabled: false
+    roleBindingName: integration-validation-rolebinding
+    roleBindingNamespace: ds1-lpad01-sumd-validation
+
+logging:
+  enabled: false
+  fluentd:
+    docker:
+      name: fluentd-agent
+      repository: nexus-ci.corp.dev.vtb/sumd-docker-lib/fluentd
+      tag: latest
+      pullPolicy: IfNotPresent
+    env:
+      FLUENT_UID: 0
+    resources:
+      requests:
+        cpu: "50m"
+        memory: "50Mi"
+      limits:
+        cpu: "100m"
+        memory: "100Mi"
+    elasticsearch:
+      host: dmdrpc-apc006ln.corp.dev.vtb
+      port: 9200
+      index: 1661_integration
+      logstash_format: true
+      ssl_verify: false
+      #buffer:
+      #  flushMode: interval
+    livenessprobe:
+      enabled: false
+      initialdelayseconds: 600
+      periodseconds: 60
+  logrotate:
+    enabled: false
+    docker:
+      name: logrotate
+      repository: nexus-ci.corp.dev.vtb/sumd-docker-lib/misc
+      tag: latest
+      pullPolicy: IfNotPresent
+    env:
+      LOGROTATE_SIZE: 40M
+      LOGROTATE_COMPRESSION: compress
+      LOGROTATE_CRON: 0 0 * * *
+      LOGROTATE_DIRECTORY: /app/logs
+      LOGROTATE_ROTATE: 1
+      LOGROTATE_DELETION_MTIME: +0
+    resources:
+      requests:
+        cpu: "50m"
+        memory: "100Mi"
+      limits:
+        cpu: "100m"
+        memory: "200Mi"
+
+###Выбор worker ноды без GPU
+affinity:
+  enabled: false
+#  nodeAffinity:
+#    requiredDuringSchedulingIgnoredDuringExecution:
+#      nodeSelectorTerms:
+#        - matchExpressions:
+#            - key: nvidia.com/gpu.product
+#              operator: DoesNotExist
+
+secrets:
+  immutable:
+    enabled: true
+
+
+### Выбор политики для автоскалирования количества подов - разкомментить требуемое
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 5
+  # targetCPUUtilizationPercentage: 80
+  # targetCPUAverageValue: 100m
+  # targetMemoryUtilizationPercentage: 80
+  # targetMemoryAverageValue: 200Mi
+
+env:
+ nexus_hostname: d5drpc-apc004ln
+ nexus_port: 10000
+ bitbucket_hostname: 10.226.8.8
+ bitbucket_hostname_ssh: 10.226.8.8
+ bitbucket_port: 10001
+ bitbucket_port_ssh: 7999
+ bitbucket_user: admin
+ jira_hostname: task.corp.dev.vtb
+ jira_port: 80
+ mlflow_hostname: d5drpc-apc004ln
+ mlflow_port: 10003
+ mlflow_test_port: 10003
+ teamcity_hostname: 10.226.8.8
+ teamcity_port: "8111"
+ camunda_hostname: 10.226.8.8
+ camunda_port: "8085"
+ camunda_authorization: "ZGVtbzpkZW1v"
+### for project ds1-lpad01-sumd-system
+ kafka_bootstrap_servers: "d5uasp-apc002lk.corp.dev.vtb:9092, d5uasp-apc003lk.corp.dev.vtb:9092, d5uasp-apc004lk.corp.dev.vtb:9092, d5uasp-apc018lk.corp.dev.vtb:9092, d5uasp-apc025lk.corp.dev.vtb:9092"
+### for project ds1-lpad01-sumd-team-sumcore-system
+# kafka_bootstrap_servers: "d5drpc-kfc004lk.corp.dev.vtb:9092, d5drpc-kfc005lk.corp.dev.vtb:9092, d5drpc-kfc006lk.corp.dev.vtb:9092"
+ kafka_security_protocol: "SSL"
+ kafka_ssl_cafile: "/var/kafka-cluster-ca-cert/ca.pem"
+ kafka_ssl_certfile: "/var/kafka-cluster-certs/cert.pem"
+ kafka_ssl_keyfile: "/var/kafka-cluster-certs/key.pem"
+ kafka_retries: 3
+ kafka_retries_min_time: 1
+ kafka_retries_max_time: 2
+ topic_to_kafka: "pim-model-deploy-in"
+ topic_from_kafka: "pim-model-deploy-out"
+ redis_host: "d5sumd-rdc001lk.corp.dev.vtb"
+ redis_port: "6379"
+ namespace_chatbot: "ds1-lpad01-auml-userspace1, rs5-lpar01-auml-userspace1, ps2-lpap01-auml-nano, ps5-lpap01-auml-nano"
+ base_is_url: "http://integration-ds1-lpad01-sumd-system.apps.ds1-lpad01.corp.dev.vtb/s3"
+ s3_bucket_name: "sumd"
+ s3_bucket_url: "d0-sum.k37-hcp13-dev.corp.dev.vtb"
+ s3_bucket_region: "my-region"
+ secure_s3: "True"
+ ssl_cert_file: "/etc/ssl/certs/ca-bundle.crt"
+ ignore_ssl_verification: "False"
+ versioning: "hcpno"
+ versioning_clean_rules: "0"
+ logging_level: "DEBUG"
+ logs_directory: "/app/logs"
+###K8s_jobs:
+ k8s_image: nexus-ci.corp.dev.vtb/sumd-docker-lib/validation-k8s:2f
+ k8s_container_name: validation-job-container
+ k8s_namespace: ds1-lpad01-sumd-validation
+ k8s_callback_url: https://integration-ds1-lpad01-sumd-system.apps.ds1-lpad01.corp.dev.vtb
+ k8s_resources_limits_cpu: "1"
+ k8s_resources_limits_memory: "350Mi"
+ k8s_resources_requests_cpu: "1"
+ k8s_resources_requests_memory: "350Mi"
+### SA от которой запускается jobs(будет default, т.к. у неё есть права на создание pods)
+ k8s_service_account_name: default
+
+
+secret:
+ nexus_authorization: "YWRtaW46WWpkc3FZdHJjZWMx"
+ bitbucket_authorization: "YWRtaW46WWpkc3E8Ym4sZnJ0bjE="
+ jira_authorization: "VFVaX1NVTV9TRVJWSUNFX0pJUkFAcmVnaW9uLnZ0Yi5ydTpaSFRnMTIzaHQ="
+ teamcity_authorization: "c3VtLWFkbWluOldhcm5pblBhc3MxMTE="
+ camunda_authorization: "ZGVtbzpkZW1v"
+ s3_bucket_access_key: "c3VtdXNlcg=="
+ s3_bucket_secret_key: "b1c0db9f39a4be69ead079a7095224e9"
+ redis_password: "some_password"
+
