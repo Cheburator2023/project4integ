@@ -1,10 +1,11 @@
-FROM nexus-ci.corp.dev.vtb/sumd-docker-lib/ubi8-base-integration:v1.0.2
-ENV TZ=Europe/Moscow
-RUN groupadd -g 1000 user && useradd -m -d /home/user -s /bin/bash -c "User for Integration service" -u 1000 -g 1000 user
-
-COPY requirements.txt /requirements.txt
-ARG PIP_INDEX_URL
-RUN pip3 install --no-cache -r /requirements.txt
+FROM docker.repo-ci.sfera.inno.local/sumd-docker-lib/ubi8-base-integration:v1.0.0
+#FROM nexus-ci.corp.dev.vtb/sumd-docker-lib/ubi8-base-integration:v1.0.2
+#ENV TZ=Europe/Moscow
+#RUN groupadd -g 1000 user && useradd -m -d /home/user -s /bin/bash -c "User for Integration service" -u 1000 -g 1000 user
+#
+#COPY requirements.txt /requirements.txt
+#ARG PIP_INDEX_URL
+#RUN pip3 install --no-cache -r /requirements.txt
 
 COPY ./ /app/
 RUN chown -R 1000:0 /app && chmod -R g=u /app
