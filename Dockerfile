@@ -1,6 +1,8 @@
-FROM docker.repo-ci.sfera.inno.local/sumd-docker-lib/ubi8-base-integration:v1.0.0
+FROM docker.repo-ci.sfera.inno.local/sumd-docker-lib/ubi8-base-integration:v1.0.1
 #FROM nexus-ci.corp.dev.vtb/sumd-docker-lib/ubi8-base-integration:v1.0.2
 #ENV TZ=Europe/Moscow
+##COPY certs/. /ca-certs/.
+##RUN mv ca-certs/Root_CA.crt Root_CA.crt && mv ca-certs/Sub_CA.crt Sub_CA.crt && trust anchor --store /ca-certs/* && mv *.crt /ca-certs/. && trust anchor --store /ca-certs/*
 #RUN groupadd -g 1000 user && useradd -m -d /home/user -s /bin/bash -c "User for Integration service" -u 1000 -g 1000 user
 #
 #COPY requirements.txt /requirements.txt
