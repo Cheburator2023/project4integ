@@ -1,5 +1,12 @@
 # Semantic Versioning Changelog
 
+## [1.1.16](https://git.sfera.inno.local/SUMD/integration/compare/v1.1.15...v1.1.16) (2024-07-20)
+
+
+### Bug Fixes
+
+* **Dockerfile:** error with s3 certs ([a33957e](https://git.sfera.inno.local/SUMD/integration/commit/a33957e65d62b13aae48f11ce92013765ed6a798))
+
 ## [1.1.15](https://bitbucket.region.vtb.ru/scm/sumd/integration/compare/v1.1.14...v1.1.15) (2023-11-27)
 
 
