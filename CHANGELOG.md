@@ -1,5 +1,12 @@
 # Semantic Versioning Changelog
 
+# [1.2.0](https://git.sfera.inno.local/SUMD/integration/compare/v1.1.16...v1.2.0) (2024-08-28)
+
+
+### Features
+
+* fake commit ([ea7c9e2](https://git.sfera.inno.local/SUMD/integration/commit/ea7c9e2a36a45a652dd9c5b4429e125c41179fde))
+
 ## [1.1.16](https://git.sfera.inno.local/SUMD/integration/compare/v1.1.15...v1.1.16) (2024-07-20)
 
 
