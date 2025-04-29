@@ -165,3 +165,10 @@ BASE_URL = os.environ.get('base_is_url', "http://integration-ds1-lpad01-sumd-sys
 
 ##### namespaces #################
 NAMESPACES = get_namespace_map()
+
+
+###### REPO ###################
+repo_base_url = os.environ.get('repo_base_url')
+repo_user = os.environ.get('repo_user')
+repo_pass = os.environ.get('repo_pass')
+###############################

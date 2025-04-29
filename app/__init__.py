@@ -64,4 +64,4 @@ app = Flask(__name__)
 app.config['PROPAGATE_EXCEPTIONS'] = True
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
-from app import mlflow, bitbucket, nexus, jira, teamcity, upload, kafka_rest, s3_minio
+from app import mlflow, bitbucket, nexus, jira, teamcity, upload, kafka_rest, s3_minio, repo
