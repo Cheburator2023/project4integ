@@ -14,9 +14,6 @@ spec:
       labels:
         app: {{ include "integration.fullname" . }}
     spec:
-      {{- if .Values.rbac.serviceAccount.enabled }}
-      serviceAccountName: {{ .Values.rbac.serviceAccount.serviceAccountName }}
-      {{- end }}
       imagePullSecrets:
         - name: {{ .Values.pullSecret }}
       {{- if .Values.affinity.enabled }}
