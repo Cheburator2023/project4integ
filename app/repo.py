@@ -1,5 +1,5 @@
 import json
-
+import base64
 import requests
 
 from app import app
@@ -9,6 +9,14 @@ from app.config import repo_base_url, repo_user, repo_pass
 
 class NotAuthenticatedError(Exception):
     pass
+
+deptMap = {
+    "Управление моделирования РБ": "RB",
+    "Управление моделирования КИБ и СМБ": "KIB_SMB",
+    "Управление перспективных алгоритмов машинного обучения": "ML_ALG",
+    "Управление моделирования партнерств и ИТ-процессов": "IT_PROC",
+    "Управление процессных и финансовых моделей": "FIN",
+}
 
 def send_http_error(message, status_code):
     return app.response_class(
@@ -20,7 +28,10 @@ def send_http_error(message, status_code):
 def auth() -> str:
     url = repo_base_url + '/get-auth-token'
 
-    r = requests.get(url, json='', headers={'Authorization': 'Basic ' + repo_user + repo_pass, 'Content-type': 'application/json'})
+    creds = f"{repo_user}:{repo_pass}"
+    urlsafe_encoded_creds = base64.urlsafe_b64encode(creds.encode('utf-8')).decode('utf-8')
+
+    r = requests.get(url, headers={'Authorization': 'Basic ' + urlsafe_encoded_creds})
 
     try:
         repo_response = r.json()
@@ -49,6 +60,8 @@ def create() -> Response:
         return send_http_error("model_desc is not set", 400)
     if not sum_data.get("ds_department"):
         return send_http_error("ds_department is not set", 400)
+    if sum_data["ds_department"] not in deptMap:
+        return send_http_error(f"ds_department value {sum_data['ds_department']} does not exist in a department map", 400)
 
     request_data = {
         "model-id": sum_data["general_model_id"],
@@ -66,7 +79,7 @@ def create() -> Response:
     headers = {
         'Authorization': 'Bearer ' + token,
         'Content-type': 'application/json',
-        'CreateOnBehalf': sum_data["ds_department"]
+        'CreateOnBehalf': deptMap[sum_data["ds_department"]]
     }
 
     r = requests.post(url, json=request_data, headers=headers)
@@ -103,7 +116,7 @@ def status() -> Response:
     if not model_id:
         return send_http_error("model_id is not set", 400)
 
-    params = {
+    request_data = {
         "model-id": general_model_id,
         "version-id": model_id,
     }
@@ -119,7 +132,7 @@ def status() -> Response:
         'Content-type': 'application/json',
     }
 
-    r = requests.get(url, params=params, headers=headers)
+    r = requests.post(url, json=request_data, headers=headers)
 
     try:
         repo_response = r.json()
