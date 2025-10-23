@@ -165,3 +165,37 @@ BASE_URL = os.environ.get('base_is_url', "http://integration-ds1-lpad01-sumd-sys
 
 ##### namespaces #################
 NAMESPACES = get_namespace_map()
+
+###### TSLG Configuration ##################
+tslg_agent_host = os.environ.get('TSLG_AGENT_HOST', 'tslg-agent-svc-main.dk1-sumd01-sumd-core.svc.cluster.local')
+tslg_agent_port = int(os.environ.get('TSLG_AGENT_PORT', '5170'))
+tslg_reconnection_delay_ms = int(os.environ.get('TSLG_RECONNECTION_DELAY_MS', '2000'))
+tslg_connection_ttl_ms = int(os.environ.get('TSLG_CONNECTION_TTL_MS', '2000'))
+tslg_client_version = os.environ.get('TSLG_CLIENT_VERSION', '1.0.0')
+
+# TSLG Advanced Settings
+tslg_enable_trace_fields = get_env_bool('TSLG_ENABLE_TRACE_FIELDS', True)
+tslg_max_buffer_size = int(os.environ.get('TSLG_MAX_BUFFER_SIZE', '500'))
+tslg_socket_timeout_ms = int(os.environ.get('TSLG_SOCKET_TIMEOUT_MS', '5000'))
+tslg_console_output = get_env_bool('TSLG_CONSOLE_OUTPUT', True)
+tslg_enable_full_context = get_env_bool('TSLG_ENABLE_FULL_CONTEXT', True)
+tslg_buffer_flush_interval_ms = int(os.environ.get('TSLG_BUFFER_FLUSH_INTERVAL_MS', '100'))
+tslg_max_connection_attempts = int(os.environ.get('TSLG_MAX_CONNECTION_ATTEMPTS', '10'))
+
+# TSLG Data Sanitization
+tslg_sanitize_percentage = int(os.environ.get('TSLG_SANITIZE_PERCENTAGE', '60'))
+tslg_sanitize_sensitive_data = get_env_bool('TSLG_SANITIZE_SENSITIVE_DATA', True)
+
+# TSLG Log Level Configuration
+tslg_log_level = os.environ.get('TSLG_LOG_LEVEL', 'info')
+
+# Application Logging Configuration
+app_name = os.environ.get('APP_NAME', 'integration')
+project_code = os.environ.get('PROJECT_CODE', 'sum')
+ris_code = os.environ.get('RIS_CODE', '1661')
+
+# Kubernetes Settings
+kubernetes_namespace = os.environ.get('KUBERNETES_NAMESPACE', 'dk1-sumd01-sumd-core')
+pod_ip = os.environ.get('POD_IP', '10.244.1.25')
+node_name = os.environ.get('NODE_NAME', 'dk1-sumd01-node-05')
+pod_name = os.environ.get('POD_NAME', 'integration-7c8b5d9f6-abc123')
