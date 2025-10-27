@@ -93,6 +93,10 @@ if os.getenv('TSLG_CONSOLE_OUTPUT', 'true').lower() == 'true':
 
 app = Flask(__name__)
 
+app.logger.info("TSLG logging configured successfully")
+app.logger.info(f"TSLG Agent: {os.getenv('TSLG_AGENT_HOST')}:{os.getenv('TSLG_AGENT_PORT')}")
+app.logger.info(f"Buffer size: {os.getenv('TSLG_MAX_BUFFER_SIZE')}, Flush interval: {os.getenv('TSLG_BUFFER_FLUSH_INTERVAL_MS')}ms")
+
 # To allow flask propagating exception even if debug is set to false on integration_services
 app.config['PROPAGATE_EXCEPTIONS'] = True
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER

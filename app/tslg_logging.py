@@ -132,6 +132,29 @@ class TSLGBufferedSocketHandler(logging.Handler):
                 self.buffer = []
                 threading.Thread(target=self._send_batch, args=(batch_to_send,), daemon=True).start()
 
+    def emit(self, record):
+        """Обработка новой записи лога"""
+        try:
+            formatted_record = self.format(record)
+
+            with self.buffer_lock:
+                self.buffer.append(formatted_record)
+                current_buffer_size = len(self.buffer)
+
+                if current_buffer_size == int(self.max_buffer_size * 0.5):
+                    print(f"TSLG Buffer at 50%: {current_buffer_size}/{self.max_buffer_size}")
+                elif current_buffer_size == int(self.max_buffer_size * 0.9):
+                    print(f"TSLG Buffer at 90%: {current_buffer_size}/{self.max_buffer_size}")
+
+                if len(self.buffer) >= self.max_buffer_size:
+                    batch_to_send = self.buffer[:]
+                    self.buffer = []
+                    print(f"TSLG Buffer full, sending batch of {len(batch_to_send)} logs")
+                    threading.Thread(target=self._send_batch, args=(batch_to_send,), daemon=True).start()
+
+        except Exception as e:
+            self.handleError(record)
+
     def close(self):
         """Закрытие обработчика"""
         self.flush()
