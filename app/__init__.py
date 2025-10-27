@@ -30,7 +30,7 @@ log_config = {
             "datefmt": "%d-%m-%Y %H:%M:%S"
         },
         "logJSON": {
-            "()": "app.logging.JSONLogFormatter"
+            "()": "app.json_logging.JSONLogFormatter"
         }
     },
     "handlers": {
