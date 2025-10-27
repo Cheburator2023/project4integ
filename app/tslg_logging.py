@@ -56,16 +56,19 @@ class TSLGBufferedSocketHandler(logging.Handler):
             if self.socket:
                 self.socket.close()
 
+            print(f"TSLG: Creating new connection to {self.host}:{self.port}")
             self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self.socket.settimeout(self.socket_timeout_ms / 1000.0)
             self.socket.connect((self.host, self.port))
             self.connection_start_time = time.time()
             self.connection_attempts = 0
+            print(f"TSLG: Successfully connected to {self.host}:{self.port}")
             return True
         except Exception as e:
             self.connection_attempts += 1
+            print(f"TSLG: Connection error: {e}")
             if self.connection_attempts >= self.max_connection_attempts:
-                self.handleError(f"Max connection attempts reached: {e}")
+                print(f"TSLG: Max connection attempts reached: {e}")
             return False
 
     def _ensure_connection(self):
@@ -76,8 +79,10 @@ class TSLGBufferedSocketHandler(logging.Handler):
         if (not self.socket or
             connection_age >= self.connection_ttl_ms or
             self.connection_attempts > 0):
+            print(f"TSLG: Reconnecting to {self.host}:{self.port}, age: {connection_age:.0f}ms, attempts: {self.connection_attempts}")
 
             if not self._create_socket():
+                print(f"TSLG: Connection failed, retrying in {self.reconnection_delay_ms}ms")
                 time.sleep(self.reconnection_delay_ms / 1000.0)
                 return self._create_socket()
 
