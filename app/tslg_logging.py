@@ -5,9 +5,9 @@ import uuid
 import os
 import time
 import threading
+import random
 from datetime import datetime
 from queue import Queue, Empty
-import random
 
 class TSLGBufferedSocketHandler(logging.Handler):
     def __init__(self, host, port, max_buffer_size=500, flush_interval_ms=100,
@@ -54,7 +54,10 @@ class TSLGBufferedSocketHandler(logging.Handler):
         """Создание нового сокет-соединения"""
         try:
             if self.socket:
-                self.socket.close()
+                try:
+                    self.socket.close()
+                except:
+                    pass
 
             print(f"TSLG: Creating new connection to {self.host}:{self.port}")
             self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -68,7 +71,7 @@ class TSLGBufferedSocketHandler(logging.Handler):
             self.connection_attempts += 1
             print(f"TSLG: Connection error: {e}")
             if self.connection_attempts >= self.max_connection_attempts:
-                print(f"TSLG: Max connection attempts reached: {e}")
+                logging.error(f"TSLG Max connection attempts reached: {e}")
             return False
 
     def _ensure_connection(self):
@@ -103,7 +106,7 @@ class TSLGBufferedSocketHandler(logging.Handler):
             self.socket.sendall(log_data.encode('utf-8'))
 
         except Exception as e:
-            self.handleError(f"Error sending log batch: {e}")
+            logging.error(f"Error sending log batch: {e}")
             time.sleep(self.reconnection_delay_ms / 1000.0)
             self._create_socket()
 
@@ -112,30 +115,6 @@ class TSLGBufferedSocketHandler(logging.Handler):
         while True:
             time.sleep(self.flush_interval_ms / 1000.0)
             self.flush()
-
-    def emit(self, record):
-        """Обработка новой записи лога"""
-        try:
-            formatted_record = self.format(record)
-
-            with self.buffer_lock:
-                self.buffer.append(formatted_record)
-
-                if len(self.buffer) >= self.max_buffer_size:
-                    batch_to_send = self.buffer[:]
-                    self.buffer = []
-                    threading.Thread(target=self._send_batch, args=(batch_to_send,), daemon=True).start()
-
-        except Exception as e:
-            self.handleError(record)
-
-    def flush(self):
-        """Принудительная отправка буфера"""
-        with self.buffer_lock:
-            if self.buffer:
-                batch_to_send = self.buffer[:]
-                self.buffer = []
-                threading.Thread(target=self._send_batch, args=(batch_to_send,), daemon=True).start()
 
     def emit(self, record):
         """Обработка новой записи лога"""
@@ -159,6 +138,14 @@ class TSLGBufferedSocketHandler(logging.Handler):
 
         except Exception as e:
             self.handleError(record)
+
+    def flush(self):
+        """Принудительная отправка буфера"""
+        with self.buffer_lock:
+            if self.buffer:
+                batch_to_send = self.buffer[:]
+                self.buffer = []
+                threading.Thread(target=self._send_batch, args=(batch_to_send,), daemon=True).start()
 
     def close(self):
         """Закрытие обработчика"""
