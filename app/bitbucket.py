@@ -7,6 +7,7 @@ from flask import request, send_from_directory, abort, make_response, jsonify
 from werkzeug.utils import secure_filename
 from datetime import datetime
 import requests
+import logging
 import os
 import shutil
 import time
@@ -80,8 +81,8 @@ def list_files_in_repo(project_key, repo_slug):
     # Paged API -- need to add ?limits=10000
     url = bitbucket_base_url_api + '/projects/' + project_key + '/repos/' + repo_slug + '/files?limit=10000'
     r = requests.get(url, headers={'Authorization': 'Basic ' + bitbucket_authorization}, verify=False)
-    app.logger.info(f"List files in repo request by url: {url}")
-    app.logger.debug(f"Result is: {r.status_code} - {json.dumps(r.json())}")
+    logging.info(f"List files in repo request by url: {url}")
+    logging.debug(f"Result is: {r.status_code} - {json.dumps(r.json())}")
     if r.status_code == 200:
         return {"files_list": r.json()["values"]}
     else:
@@ -96,7 +97,7 @@ def prepare_file_link(project_key: str, repo_slug: str, filename: str) -> str:
 @app.route('/bitbucket/<string:project_key>/<string:repo_slug>/<string:filename>/get-file-link')
 def get_file_link(project_key, repo_slug, filename):
     url = prepare_file_link(project_key, repo_slug, filename)
-    app.logger.info(f"Got file link: {url}")
+    logging.info(f"Got file link: {url}")
     return {'file_link': url}
 
 
@@ -108,7 +109,7 @@ def get_file(project_key, repo_slug, filename):
     try:
         os.mkdir(path_to_file)
     except FileExistsError:
-        app.logger.info("Directory {} already exist. Let's use this dir.".format(path_to_file))
+        logging.info("Directory {} already exist. Let's use this dir.".format(path_to_file))
         pass
     """Get file -- but on service only."""\
     # http://http://84.201.157.251:7990/projects/TEST3/repos/repo1/raw/mb_manual_x570-aorus-raid.pdf?at=refs%2Fheads%2Fmaster
@@ -136,7 +137,7 @@ def project_create():
     try:
         validate(request_data, BITBUCKET_PROJECT_CREATE_SCHEMA)
     except (ValidationError, SchemaError) as e:
-        app.logger.warning(f"Validation error: {e.message}")
+        logging.warning(f"Validation error: {e.message}")
         return app.response_class(
             response=json.dumps({"status": "error", "message": e.message}),
             status=400,
@@ -149,7 +150,7 @@ def project_create():
             url2 = bitbucket_base_url_api + '/projects/' + request_data["key"] + '/permissions/groups?permission=PROJECT_READ&name=dit_group'
             r2 = requests.put(url2, headers={'Authorization': 'Basic ' + bitbucket_authorization}, verify=False)
         except:
-            app.logger.warning("SUM BITBUCKET -- there is some problem with grant permission for dit_group for this project")
+            logging.warning("SUM BITBUCKET -- there is some problem with grant permission for dit_group for this project")
             pass
         return r.json()
     else:
@@ -158,7 +159,7 @@ def project_create():
 # create repo
 @app.route('/bitbucket/<string:project_key>/repos/create', methods=['POST'])
 def repo_create(project_key):
-    app.logger.info("SUM BITBUCKET START repo_create operation: {}".format(datetime.today().strftime("%Y-%m-%d %H:%M:%S")))
+    logging.info("SUM BITBUCKET START repo_create operation: {}".format(datetime.today().strftime("%Y-%m-%d %H:%M:%S")))
     """Create project"""
     # Check against http or ssh requests!!!!!!!!!!!!
     url = bitbucket_base_url_api + '/projects/' + project_key + '/repos'
@@ -166,27 +167,27 @@ def repo_create(project_key):
     try:
         validate(request_data, BITBUCKET_REPO_CREATE_SCHEMA)
     except (ValidationError, SchemaError) as e:
-        app.logger.warning(f"Validation error: {e.message}")
+        logging.warning(f"Validation error: {e.message}")
         return app.response_class(
             response=json.dumps({"status": "error", "message": e.message}),
             status=400,
             mimetype="application/json"
         )
-    app.logger.info(f"request url: {url}")
-    app.logger.info(f"request body: {request_data}")
+    logging.info(f"request url: {url}")
+    logging.info(f"request body: {request_data}")
     r = requests.post(url, json=request_data, headers={'Authorization': 'Basic ' + bitbucket_authorization}, verify=False)
 
     # Repo initialization with one empty file "initial_commit"
     ##repo_slug = request_data["name"]
     # return r.json()
-    app.logger.debug(f"request response body: {r.text}")
+    logging.debug(f"request response body: {r.text}")
     repo_slug = r.json()["slug"]
     rnd_sfx = ''.join(random.choices(string.ascii_uppercase + string.digits, k=7))
     path_to_file = app.config['UPLOAD_FOLDER'] + '/' + rnd_sfx
     try:
         os.mkdir(path_to_file)
     except FileExistsError:
-        app.logger.exception("Directory {} already exist. Let's use this dir.".format(path_to_file))
+        logging.exception("Directory {} already exist. Let's use this dir.".format(path_to_file))
         pass
     if os.path.exists(path_to_file):
         os.chdir(path_to_file)
@@ -194,24 +195,24 @@ def repo_create(project_key):
         os.system('git init')
         os.system('git add --all')
         os.system('git commit -m "Initial commit"')
-        app.logger.info("SUM BITBUCKET git remote add :")
+        logging.info("SUM BITBUCKET git remote add :")
         os.system('git remote add sshtmporigin' + rnd_sfx + ' ssh://root@' + bitbucket_hostname_ssh + ':' + str(
             bitbucket_port_ssh) +
                   '/' + project_key + '/' + repo_slug + '.git')
         os.system('git push -u sshtmporigin' + rnd_sfx +' master')
-        app.logger.info("SUM BITBUCKET git remote remove sshtmporigin:")
+        logging.info("SUM BITBUCKET git remote remove sshtmporigin:")
         os.system('git remote remove sshtmporigin' + rnd_sfx)
-        app.logger.info('deleting dir')
+        logging.info('deleting dir')
         if app.config['UPLOAD_FOLDER']:
             shutil.rmtree(path_to_file)
-    app.logger.info("SUM BITBUCKET END repo_create operation: {}".format(datetime.today().strftime("%Y-%m-%d %H:%M:%S")))
+    logging.info("SUM BITBUCKET END repo_create operation: {}".format(datetime.today().strftime("%Y-%m-%d %H:%M:%S")))
     if r.status_code == 201:
         return r.json()
     else:
         return {'message': 'Create project failed!', 'error_info': r.json()}
 
 def pull_request(project_key, repo_slug, rnd_sfx):
-    app.logger.info("SUM BITBUCKET START pull_request operation: {}".format(datetime.today().strftime("%Y-%m-%d %H:%M:%S")))
+    logging.info("SUM BITBUCKET START pull_request operation: {}".format(datetime.today().strftime("%Y-%m-%d %H:%M:%S")))
     """Create pull_request"""
     # Check against http or ssh requests!!!!!!!!!!!!
     url = bitbucket_base_url_api + '/projects/' + project_key + '/repos/' + repo_slug + '/pull-requests'
@@ -228,10 +229,10 @@ def pull_request(project_key, repo_slug, rnd_sfx):
             "id": "refs/heads/master"
             }
         }
-    app.logger.debug(json.dumps(request_data))
+    logging.debug(json.dumps(request_data))
     r = requests.post(url, json=request_data, headers={'Authorization': 'Basic ' + bitbucket_authorization}, verify=False)
-    app.logger.info(r.content)
-    app.logger.info("SUM BITBUCKET END pull_request operation: {}".format(datetime.today().strftime("%Y-%m-%d %H:%M:%S")))
+    logging.info(r.content)
+    logging.info("SUM BITBUCKET END pull_request operation: {}".format(datetime.today().strftime("%Y-%m-%d %H:%M:%S")))
     if r.status_code == 201:
         return r.json()
     else:
@@ -239,14 +240,14 @@ def pull_request(project_key, repo_slug, rnd_sfx):
 
 # pull_req_id, version_id from return of pull_request()
 def merge(project_key, repo_slug, pull_req_id, version_id):
-    app.logger.info("SUM BITBUCKET START merge operation: {}".format(datetime.today().strftime("%Y-%m-%d %H:%M:%S")))
+    logging.info("SUM BITBUCKET START merge operation: {}".format(datetime.today().strftime("%Y-%m-%d %H:%M:%S")))
     url = bitbucket_base_url_api + '/projects/' + project_key + '/repos/' + repo_slug + '/pull-requests/' + \
           str(pull_req_id) + '/merge'
     # version_id = bla-bla-bla
     # version_id = 0
     request_data = {"version": version_id}
     r = requests.post(url, json=request_data, headers={'Authorization': 'Basic ' + bitbucket_authorization}, verify=False)
-    app.logger.info("SUM BITBUCKET END merge operation: {}".format(datetime.today().strftime("%Y-%m-%d %H:%M:%S")))
+    logging.info("SUM BITBUCKET END merge operation: {}".format(datetime.today().strftime("%Y-%m-%d %H:%M:%S")))
     if r.status_code == 200:
         return r.json()
     else:
@@ -254,14 +255,14 @@ def merge(project_key, repo_slug, pull_req_id, version_id):
 
 
 def replace_file_in_repo(project_key, repo_slug, filename, rnd_sfx=''):
-    app.logger.info("SUM BITBUCKET START replace_file_in_repo operation: {}".format(datetime.today().strftime("%Y-%m-%d %H:%M:%S")))
+    logging.info("SUM BITBUCKET START replace_file_in_repo operation: {}".format(datetime.today().strftime("%Y-%m-%d %H:%M:%S")))
     path_to_file = app.config['UPLOAD_FOLDER'] + '/' + filename + rnd_sfx
     replaced = False
     """Upload file to the repo"""
     try:
         os.mkdir(path_to_file)
     except FileExistsError:
-        app.logger.info("Directory {} already exist. Let's use this dir.".format(path_to_file))
+        logging.info("Directory {} already exist. Let's use this dir.".format(path_to_file))
         pass
     if os.path.exists(path_to_file):
         os.chdir(path_to_file)
@@ -283,27 +284,27 @@ def replace_file_in_repo(project_key, repo_slug, filename, rnd_sfx=''):
             os.system('git commit -m "Commit from SUM integration service, replacement file"')
         os.system('git push --set-upstream ssh://root@' + bitbucket_hostname_ssh + ':' + str(bitbucket_port_ssh) +
                  '/' + project_key + '/' + repo_slug + '.git master')
-        app.logger.info('deleting dir')
+        logging.info('deleting dir')
         # check if UPLOAD_FOLDER not set
         if app.config['UPLOAD_FOLDER']:
             shutil.rmtree(path_to_file)
-        app.logger.info("SUM BITBUCKET END replace_file_in_repo operation: {}".format(datetime.today().strftime("%Y-%m-%d %H:%M:%S")))
+        logging.info("SUM BITBUCKET END replace_file_in_repo operation: {}".format(datetime.today().strftime("%Y-%m-%d %H:%M:%S")))
         return get_file_link(project_key, repo_slug, filename)
     else:
         return {'status': 'error', 'message': path_to_file + ' doesnt exist'}
 
 def upload_new_file_to_repo(project_key, repo_slug, filename, rnd_sfx):
-    app.logger.info("SUM BITBUCKET START upload_new_file_to_repo operation: {}".format(datetime.today().strftime("%Y-%m-%d %H:%M:%S")))
+    logging.info("SUM BITBUCKET START upload_new_file_to_repo operation: {}".format(datetime.today().strftime("%Y-%m-%d %H:%M:%S")))
     path_to_file = app.config['UPLOAD_FOLDER'] + '/' + filename + rnd_sfx
-    app.logger.info("path_to_file is: {}".format(path_to_file))
+    logging.info("path_to_file is: {}".format(path_to_file))
     """Upload file to the repo"""
     # generate random suffix
     #rnd_sfx = ''.join(random.choices(string.ascii_uppercase + string.digits, k=7))
-    app.logger.info("rnd_sfx in upload_new_file_to_repo is: {}".format(rnd_sfx))
+    logging.info("rnd_sfx in upload_new_file_to_repo is: {}".format(rnd_sfx))
     try:
         os.mkdir(path_to_file)
     except FileExistsError:
-        app.logger.warning("Directory {} already exist. Let's use this dir.".format(path_to_file))
+        logging.warning("Directory {} already exist. Let's use this dir.".format(path_to_file))
         pass
     if os.path.exists(path_to_file):
         os.chdir(path_to_file)
@@ -313,24 +314,24 @@ def upload_new_file_to_repo(project_key, repo_slug, filename, rnd_sfx):
         os.system('git commit -m "Uploaded by SUM integration service ' + time.ctime() + '"')
         # creating command line alike  'git remote add sshtmporigin ssh://user@84.201.157.251:7999/test3/repo1.git'
         # FYI HTTP link http://84.201.159.230:7990/scm/test1/test1-repo.git')
-        app.logger.info("SUM BITBUCKET git remote add :")
+        logging.info("SUM BITBUCKET git remote add :")
         os.system('git remote add sshtmporigin' + rnd_sfx + ' ssh://root@' + bitbucket_hostname_ssh + ':' + str(bitbucket_port_ssh) +
                 '/' + project_key + '/' + repo_slug + '.git')
-        app.logger.info("SUM BITBUCKET first git remote push :")
+        logging.info("SUM BITBUCKET first git remote push :")
         os.system('git push sshtmporigin' + rnd_sfx + ' master:refs/heads/tmpbranch' + rnd_sfx)
         ### REST part start
-        app.logger.info("SUM BITBUCKET pull request :")
+        logging.info("SUM BITBUCKET pull request :")
         pull_req_out = pull_request(project_key, repo_slug, rnd_sfx)
         merge(project_key, repo_slug, pull_req_out["id"], pull_req_out["version"])
         ### REST part end
-        app.logger.info("SUM BITBUCKET second git remote push :")
+        logging.info("SUM BITBUCKET second git remote push :")
         os.system('git push sshtmporigin' + rnd_sfx + ' :tmpbranch' + rnd_sfx)
-        app.logger.info("SUM BITBUCKET git remote remove :")
+        logging.info("SUM BITBUCKET git remote remove :")
         os.system('git remote remove sshtmporigin' + rnd_sfx)
         # check if UPLOAD_FOLDER not set
         if app.config['UPLOAD_FOLDER']:
             shutil.rmtree(path_to_file)
-        app.logger.info("SUM BITBUCKET END upload_new_file_to_repo operation: {}".format(datetime.today().strftime("%Y-%m-%d %H:%M:%S")))
+        logging.info("SUM BITBUCKET END upload_new_file_to_repo operation: {}".format(datetime.today().strftime("%Y-%m-%d %H:%M:%S")))
         return get_file_link(project_key, repo_slug, filename)
     else:
         return {'status': 'error', 'message': path_to_file + ' doesnt exist'}
@@ -338,7 +339,7 @@ def upload_new_file_to_repo(project_key, repo_slug, filename, rnd_sfx):
 # upload or replace file in repo
 @app.route('/bitbucket/<string:project_key>/<string:repo_slug>/upload_file/<string:filename>', methods=['POST'])
 def upload_file(project_key, repo_slug, filename):
-    app.logger.info("SUM BITBUCKET START upload_file operation: {}".format(datetime.today().strftime("%Y-%m-%d %H:%M:%S")))
+    logging.info("SUM BITBUCKET START upload_file operation: {}".format(datetime.today().strftime("%Y-%m-%d %H:%M:%S")))
     rnd_sfx = ''.join(random.choices(string.ascii_uppercase + string.digits, k=7))
     # Upload file to the temp dir on integration service:
     upload_state = upload.upload_file(filename, rnd_sfx)
@@ -347,13 +348,13 @@ def upload_file(project_key, repo_slug, filename):
 
     if filename in list_files_in_repo(project_key, repo_slug)["files_list"]:
     # if filename in list_files:
-        app.logger.info("REPLACE file {}".format(filename))
-        app.logger.info("SUM BITBUCKET END upload_file operation: {}".format(datetime.today().strftime("%Y-%m-%d %H:%M:%S")))
+        logging.info("REPLACE file {}".format(filename))
+        logging.info("SUM BITBUCKET END upload_file operation: {}".format(datetime.today().strftime("%Y-%m-%d %H:%M:%S")))
         return replace_file_in_repo(project_key, repo_slug, filename, rnd_sfx)
     else:
-        app.logger.info("UPLOAD {}".format(filename))
-        app.logger.info("rnd_sfx in upload_file is {}".format(rnd_sfx))
-        app.logger.info("SUM BITBUCKET END upload_file operation: {}".format(datetime.today().strftime("%Y-%m-%d %H:%M:%S")))
+        logging.info("UPLOAD {}".format(filename))
+        logging.info("rnd_sfx in upload_file is {}".format(rnd_sfx))
+        logging.info("SUM BITBUCKET END upload_file operation: {}".format(datetime.today().strftime("%Y-%m-%d %H:%M:%S")))
         return upload_new_file_to_repo(project_key, repo_slug, filename, rnd_sfx)
 
 
@@ -366,7 +367,7 @@ def upload_multiple_files(project_key: str, repo_slug: str) -> dict:
     try:
         files_set = set(files_in_repo["files_list"])
     except KeyError:
-        app.logger.warning("KeyError in upload_multiple_files, \"files_list\"")
+        logging.warning("KeyError in upload_multiple_files, \"files_list\"")
         abort(make_response(jsonify(files_in_repo), 400))
     new_files = []
     old_files = []
@@ -412,10 +413,10 @@ def upload_new_multiple_file_to_repo(project_key: str, repo_slug: str, filename_
     :param path_to_file: Temporary dir where files store
     :return: List of processed files
     """
-    app.logger.info(f"SUM BITBUCKET START upload_new_multiple_file_to_repo operation: {utils.get_current_datetime()}")
-    app.logger.info(f"path_to_files is: {path_to_file}")
+    logging.info(f"SUM BITBUCKET START upload_new_multiple_file_to_repo operation: {utils.get_current_datetime()}")
+    logging.info(f"path_to_files is: {path_to_file}")
     if not os.path.exists(path_to_file):
-        app.logger.info(f'{path_to_file} doesnt exist')
+        logging.info(f'{path_to_file} doesnt exist')
         return []
     # генерируем случайную последовательность
     rnd_sfx = utils.get_rnd_sfx()
@@ -426,28 +427,28 @@ def upload_new_multiple_file_to_repo(project_key: str, repo_slug: str, filename_
         os.system(f'git add {file_name}')
     # делаем локальный коммит
     os.system(f'git commit -m "Uploaded by SUM integration service {time.ctime()}"')
-    app.logger.info("SUM BITBUCKET git remote add :")
+    logging.info("SUM BITBUCKET git remote add :")
     # добавляем связку для внешнего репозитория
     os.system(f'git remote add sshtmporigin{rnd_sfx} ssh://root@{bitbucket_hostname_ssh}:{bitbucket_port_ssh}/'
               f'{project_key}/{repo_slug}.git')
-    app.logger.info("SUM BITBUCKET first git remote push :")
+    logging.info("SUM BITBUCKET first git remote push :")
     # пушим изменения во внешний репозиторий
     os.system(f'git push sshtmporigin{rnd_sfx} master:refs/heads/tmpbranch{rnd_sfx}')
-    app.logger.info("SUM BITBUCKET pull request :")
+    logging.info("SUM BITBUCKET pull request :")
     # делаем пул запрос
     pull_req_out = pull_request(project_key, repo_slug, rnd_sfx)
     # мерджим изменения
     merge_out = merge(project_key, repo_slug, pull_req_out["id"], pull_req_out["version"])
-    app.logger.info("SUM BITBUCKET second git remote push :")
+    logging.info("SUM BITBUCKET second git remote push :")
     # удаляем внешнюю ветку
     os.system(f'git push sshtmporigin{rnd_sfx} :tmpbranch{rnd_sfx}')
-    app.logger.info("SUM BITBUCKET git remote remove :")
+    logging.info("SUM BITBUCKET git remote remove :")
     # удаляем свзяку с внешним репозиторием
     os.system(f'git remote remove sshtmporigin{rnd_sfx}')
     # удаляем файлы которые были уже добавлены
     for file_name in filename_list:
         os.remove(os.path.join(path_to_file, file_name))
-    app.logger.info(f"SUM BITBUCKET END upload_new_multiple_file_to_repo operation: {utils.get_current_datetime()}")
+    logging.info(f"SUM BITBUCKET END upload_new_multiple_file_to_repo operation: {utils.get_current_datetime()}")
     return filename_list
 
 
@@ -460,9 +461,9 @@ def replace_multiple_file_in_repo(project_key: str, repo_slug: str, filename_lis
     :param path_to_file: Temporary dir for uploading
     :return:
     """
-    app.logger.info(f"SUM BITBUCKET START replace_multiple_file_in_repo operation: {utils.get_current_datetime()}")
+    logging.info(f"SUM BITBUCKET START replace_multiple_file_in_repo operation: {utils.get_current_datetime()}")
     if not os.path.exists(path_to_file):
-        app.logger.warning(f'{path_to_file} doesnt exist')
+        logging.warning(f'{path_to_file} doesnt exist')
         return []
     # ре/инициализируем локальный репозиторий
     os.system('git init')
@@ -486,25 +487,25 @@ def replace_multiple_file_in_repo(project_key: str, repo_slug: str, filename_lis
     os.system('git commit -m "Commit from SUM integration service, replacement file"')
     # пушим на сервер
     os.system(f'git push --set-upstream {git_url} master')
-    app.logger.info('deleting files')
+    logging.info('deleting files')
     for file_name in filename_list:
         # удаляем файлы которые заменяли
         os.remove(os.path.join(path_to_file, file_name))
-    app.logger.info(f"SUM BITBUCKET END replace_file_in_repo operation: {utils.get_current_datetime()}")
+    logging.info(f"SUM BITBUCKET END replace_file_in_repo operation: {utils.get_current_datetime()}")
     return filename_list
 
 
 # remove file from bitbucket
 @app.route('/bitbucket/<string:project_key>/<string:repo_slug>/<string:filename>/remove')
 def remove_file_on_bitbucket(project_key, repo_slug, filename):
-    app.logger.info("SUM BITBUCKET START remove_file_on_bitbucket operation: {}".format(datetime.today().strftime("%Y-%m-%d %H:%M:%S")))
+    logging.info("SUM BITBUCKET START remove_file_on_bitbucket operation: {}".format(datetime.today().strftime("%Y-%m-%d %H:%M:%S")))
     rnd_sfx = ''.join(random.choices(string.ascii_uppercase + string.digits, k=7))
     path_to_file = app.config['UPLOAD_FOLDER'] + '/' + filename + rnd_sfx
     replaced = False
     try:
         os.mkdir(path_to_file)
     except FileExistsError:
-        app.logger.info("Directory {} already exist. Let's use this dir.".format(path_to_file))
+        logging.info("Directory {} already exist. Let's use this dir.".format(path_to_file))
         pass
     """Upload file to the repo"""
     if os.path.exists(path_to_file):
@@ -515,17 +516,17 @@ def remove_file_on_bitbucket(project_key, repo_slug, filename):
         os.system('git pull ssh://root@' + bitbucket_hostname_ssh + ':' + str(bitbucket_port_ssh) +
                   '/' + project_key + '/' + repo_slug + '.git')
         if os.path.exists(filename):
-            app.logger.info('remove file ' + filename)
+            logging.info('remove file ' + filename)
             os.remove(filename)
         os.system('git add --all ' + filename)
         os.system('git commit -m "Deleting file ' + filename + ' by SUM integration service ' + time.ctime() + '"')
         os.system('git push --set-upstream ssh://root@' + bitbucket_hostname_ssh + ':' + str(bitbucket_port_ssh) +
                  '/' + project_key + '/' + repo_slug + '.git master')
-        app.logger.info('deleting dir')
+        logging.info('deleting dir')
         # check if UPLOAD_FOLDER not set
         if app.config['UPLOAD_FOLDER']:
             shutil.rmtree(path_to_file)
-        app.logger.info("SUM BITBUCKET END remove_file_on_bitbucket operation: {}".format(datetime.today().strftime("%Y-%m-%d %H:%M:%S")))
+        logging.info("SUM BITBUCKET END remove_file_on_bitbucket operation: {}".format(datetime.today().strftime("%Y-%m-%d %H:%M:%S")))
         return {'message': 'ok'}
     else:
         return {'message': path_to_file + ' unable to create dir for delete operation'}
@@ -534,17 +535,17 @@ def remove_file_on_bitbucket(project_key, repo_slug, filename):
 
 @app.route('/bitbucket/<string:project_key>/<string:repo_slug>/copy_to/<string:project_new_key>/<string:repo_new_slug>')
 def create_repo_copy(project_key, repo_slug, project_new_key, repo_new_slug):
-    app.logger.info("SUM BITBUCKET START create_repo_copy operation: {}".format(datetime.today().strftime("%Y-%m-%d %H:%M:%S")))
+    logging.info("SUM BITBUCKET START create_repo_copy operation: {}".format(datetime.today().strftime("%Y-%m-%d %H:%M:%S")))
     rnd_sfx = ''.join(random.choices(string.ascii_uppercase + string.digits, k=7))
     path_to_file = app.config['UPLOAD_FOLDER'] + '/repo_copy' + rnd_sfx
     try:
         os.mkdir(path_to_file)
     except FileExistsError:
-        app.logger.info("Directory {} already exist. Let's use this dir.".format(path_to_file))
+        logging.info("Directory {} already exist. Let's use this dir.".format(path_to_file))
         pass
     if os.path.exists(path_to_file):
         os.chdir(path_to_file)
-        app.logger.info("SUM BITBUCKET First clone")
+        logging.info("SUM BITBUCKET First clone")
         os.system('git clone ssh://root@' + bitbucket_hostname_ssh + ':' + str(bitbucket_port_ssh) +
                   '/' + project_key + '/' + repo_slug + '.git')
         os.system("cp " + repo_new_slug + "/initial_commit ./" + repo_slug + "/")
@@ -555,15 +556,15 @@ def create_repo_copy(project_key, repo_slug, project_new_key, repo_new_slug):
         os.system('git commit -m "Initial Commit by SUM integration service ' + time.ctime() + '"')
         os.system('git remote add sshtmporigin' + rnd_sfx + ' ssh://root@' + bitbucket_hostname_ssh + ':' + str(bitbucket_port_ssh) +
                          '/' + project_new_key + '/' + repo_new_slug + '.git')
-        app.logger.info("SUM BITBUCKET git push")
+        logging.info("SUM BITBUCKET git push")
         os.system('git push -f sshtmporigin' + rnd_sfx + ' master')
-        app.logger.info("SUM BITBUCKET git remote remove :")
+        logging.info("SUM BITBUCKET git remote remove :")
         os.system('git remote remove sshtmporigin' + rnd_sfx)
-        app.logger.info('deleting dir')
+        logging.info('deleting dir')
         # check if UPLOAD_FOLDER not set
         if app.config['UPLOAD_FOLDER']:
             shutil.rmtree(path_to_file)
-        app.logger.info("SUM BITBUCKET END create_repo_copy operation: {}".format(datetime.today().strftime("%Y-%m-%d %H:%M:%S")))
+        logging.info("SUM BITBUCKET END create_repo_copy operation: {}".format(datetime.today().strftime("%Y-%m-%d %H:%M:%S")))
         return get_repo_link(project_new_key, repo_new_slug)
     else:
         return {'message': path_to_file + ' unable to create dir for delete operation'}
@@ -596,25 +597,25 @@ def upload_new_file_to_bitbucket2(project_key, repo_slug):
             os.system('git commit -m "Uploaded by SUM integration service ' + time.ctime() + '"')
             # creating command line alike  'git remote add sshtmporigin ssh://user@84.201.157.251:7999/test3/repo1.git'
             # FYI HTTP link http://84.201.159.230:7990/scm/test1/test1-repo.git')
-            app.logger.info("SUM BITBUCKET git remote add :")
+            logging.info("SUM BITBUCKET git remote add :")
             os.system('git remote add sshtmporigin' + rnd_sfx + ' ssh://root@' + bitbucket_hostname_ssh + ':' + str(bitbucket_port_ssh) +
                     '/' + project_key + '/' + repo_slug + '.git')
-            app.logger.info("SUM BITBUCKET first git remote push :")
+            logging.info("SUM BITBUCKET first git remote push :")
             os.system('git push sshtmporigin' + rnd_sfx + ' master:refs/heads/tmpbranch' + rnd_sfx)
             ### REST part start
-            app.logger.info("SUM BITBUCKET pull request :")
+            logging.info("SUM BITBUCKET pull request :")
             pull_req_out = pull_request(project_key, repo_slug, rnd_sfx)
             # return pull_req_out
             merge_out = merge(project_key, repo_slug, pull_req_out["id"], pull_req_out["version"])
             ### REST part end
-            app.logger.info("SUM BITBUCKET second git remote push :")
+            logging.info("SUM BITBUCKET second git remote push :")
             os.system('git push sshtmporigin' + rnd_sfx + ' :tmpbranch' + rnd_sfx)
-            app.logger.info("SUM BITBUCKET git remote remove :")
+            logging.info("SUM BITBUCKET git remote remove :")
             os.system('git remote remove sshtmporigin' + rnd_sfx)
             # check if UPLOAD_FOLDER not set
             if app.config['UPLOAD_FOLDER']:
                 shutil.rmtree(path_to_file)
-            app.logger.info("SUM BITBUCKET END upload_new_file_to_repo operation: {}".format(datetime.today().strftime("%Y-%m-%d %H:%M:%S")))
+            logging.info("SUM BITBUCKET END upload_new_file_to_repo operation: {}".format(datetime.today().strftime("%Y-%m-%d %H:%M:%S")))
             return get_file_link(project_key, repo_slug, filename)
         else:
             return {'status': 'error', 'message': path_to_file + ' doesnt exist'}

@@ -187,7 +187,7 @@ tslg_sanitize_percentage = int(os.environ.get('TSLG_SANITIZE_PERCENTAGE', '60'))
 tslg_sanitize_sensitive_data = get_env_bool('TSLG_SANITIZE_SENSITIVE_DATA', True)
 
 # TSLG Log Level Configuration
-tslg_log_level = os.environ.get('TSLG_LOG_LEVEL', 'info')
+tslg_log_level = os.environ.get('TSLG_LOG_LEVEL', 'INFO')
 
 # Application Logging Configuration
 app_name = os.environ.get('APP_NAME', 'integration')

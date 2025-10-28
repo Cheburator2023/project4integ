@@ -81,9 +81,9 @@ dictConfig(log_config)
 
 app = Flask(__name__)
 
-app.logger.info("TSLG logging configured successfully")
-app.logger.info(f"TSLG Agent: {os.getenv('TSLG_AGENT_HOST')}:{os.getenv('TSLG_AGENT_PORT')}")
-app.logger.info(f"Buffer size: {os.getenv('TSLG_MAX_BUFFER_SIZE')}, Flush interval: {os.getenv('TSLG_BUFFER_FLUSH_INTERVAL_MS')}ms")
+logging.info("TSLG logging configured successfully")
+logging.info(f"TSLG Agent: {os.getenv('TSLG_AGENT_HOST')}:{os.getenv('TSLG_AGENT_PORT')}")
+logging.info(f"Buffer size: {os.getenv('TSLG_MAX_BUFFER_SIZE')}, Flush interval: {os.getenv('TSLG_BUFFER_FLUSH_INTERVAL_MS')}ms")
 
 # To allow flask propagating exception even if debug is set to false on integration_services
 app.config['PROPAGATE_EXCEPTIONS'] = True

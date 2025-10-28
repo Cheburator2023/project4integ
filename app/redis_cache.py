@@ -2,6 +2,7 @@ from enum import Enum
 from functools import lru_cache
 from json import dumps
 from typing import Any, Dict, List, Optional, Tuple, Union, Callable
+import logging
 
 from redis import ConnectionError, ConnectionPool
 from redis import Redis as RedisClient
@@ -57,7 +58,7 @@ class Cache(object):
         try:
             self.redis_client: RedisClient = get_client(redis_db)
         except ConnectionError as err:
-            app.logger.warning(f"Error connecting to redis server. {err}")
+            logging.warning(f"Error connecting to redis server. {err}")
         if hash_rule:
             self.hash_rule = hash_rule
         else:
@@ -96,7 +97,7 @@ class Cache(object):
                 ex=ttl if ttl else kafka_message_ttl,
             )
         except ConnectionError as err:
-            app.logger.warning(f"Error saving cache in redis. {err}")
+            logging.warning(f"Error saving cache in redis. {err}")
 
     def get_by_data(self) -> Tuple[Optional[str], Optional[CacheStatus]]:
         cache: Optional[str] = None
@@ -112,7 +113,7 @@ class Cache(object):
                     )
                 )
         except ConnectionError as err:
-            app.logger.warning(
+            logging.warning(
                 f"Error getting cache by data, error connecting "
                 f"to redis server. {err}"
             )
@@ -127,7 +128,7 @@ class Cache(object):
             if cache is not None:
                 self.data = cache
         except ConnectionError as err:
-            app.logger.warning(
+            logging.warning(
                 f"An error occurred while getting the cache by message id. "
                 f"Error connecting to redis server. {err}"
             )
@@ -148,7 +149,7 @@ class Cache(object):
                 )
                 result.append({"key": key, "status": status, "cache": cache})
         except ConnectionError as err:
-            app.logger.warning(
+            logging.warning(
                 f"Error getting all cache entries. Error connecting to redis "
                 f"server. {err}"
             )
@@ -170,13 +171,13 @@ class Cache(object):
                 f"{prefix}:{cache_id}:status"
             )
         except ConnectionError as err:
-            app.logger.warning(
+            logging.warning(
                 f"Error while trying to delete cache entry by id '{cache_id}'."
                 f"Error connecting to redis server. {err}"
             )
             return False
         except KeyError:
-            app.logger.warning(
+            logging.warning(
                 f"Error while trying to delete cache entry. The entry "
                 f"with id '{cache_id}' was not found in the cache."
             )
@@ -187,7 +188,7 @@ class Cache(object):
         try:
             keys: List[Tuple[str, str]] = self._list_all_keys()
         except ConnectionError as err:
-            app.logger.warning(
+            logging.warning(
                 f"Cache invalidation error. Error connecting to redis "
                 f"server. {err}"
             )

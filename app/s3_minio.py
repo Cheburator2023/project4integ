@@ -1,4 +1,5 @@
 import json
+import logging
 from typing import Dict
 
 from flask import request, Response
@@ -22,7 +23,7 @@ def get_project_link_s3(project_key: str) -> Response:
     try:
         s3_object_count = s3bucket.count_objects_by_path(project_key)
     except ConnectionToMinioError:
-        app.logger.exception(f"Can't connect to minio server and list objects")
+        logging.exception(f"Can't connect to minio server and list objects")
         return app.response_class(
             response=json.dumps({"status": "error", "message": "Can't connect to minio server or list objects"}),
             status=504,
@@ -49,7 +50,7 @@ def list_projects_s3() -> Response:
     try:
         projects_names = s3bucket.list_projects_names()
     except ConnectionToMinioError:
-        app.logger.exception(f"Can't connect to minio server and list objects")
+        logging.exception(f"Can't connect to minio server and list objects")
         return app.response_class(
             response=json.dumps({"status": "error", "message": "Can't connect to minio server or list objects"}),
             status=504,
@@ -79,7 +80,7 @@ def list_all_repos_s3() -> Response:
             for repo_name in repos:
                 items.append(f'{project_name}/{repo_name}')
     except ConnectionToMinioError:
-        app.logger.exception(f"Can't connect to minio server and list objects")
+        logging.exception(f"Can't connect to minio server and list objects")
         return app.response_class(
             response=json.dumps({"status": "error", "message": "Can't connect to minio server or list objects"}),
             status=504,
@@ -106,7 +107,7 @@ def list_repos_s3(project_key: str) -> Response:
     try:
         items = s3bucket.list_repo_names(project_key)
     except ConnectionToMinioError:
-        app.logger.exception(f"Can't connect to minio server and list objects")
+        logging.exception(f"Can't connect to minio server and list objects")
         return app.response_class(
             response=json.dumps({"status": "error", "message": "Can't connect to minio server or list objects"}),
             status=504,
@@ -133,7 +134,7 @@ def list_files_in_repo_s3(project_key: str, repo_slug: str) -> Response:
     try:
         objects = s3bucket.list_objects_names(project_key, repo_slug)
     except ConnectionToMinioError:
-        app.logger.exception(f"Can't connect to minio server and list objects")
+        logging.exception(f"Can't connect to minio server and list objects")
         return app.response_class(
             response=json.dumps({"status": "error", "message": "Can't connect to minio server or list objects"}),
             status=504,
@@ -185,15 +186,15 @@ def get_file_s3(project_key: str, repo_slug: str, filename: str) -> Response:
     try:
         file_object = s3bucket.get_object(file_name)
     except ObjectNotExistsError:
-        app.logger.warning("Can't get object")
+        logging.warning("Can't get object")
         return app.response_class(
             response=json.dumps({"status": "error", "message": "Object is not exists"}),
             status=404,
             mimetype="application/json"
         )
     except Exception as e:
-        app.logger.warning("Unexpected error")
-        app.logger.warning(e)
+        logging.warning("Unexpected error")
+        logging.warning(e)
         return app.response_class(
             response=json.dumps({"status": "error", "message": str(e)}),
             status=404,
@@ -216,7 +217,7 @@ def project_create_s3() -> Response:
     try:
         validate(request_data, PROJECT_CREATE_S3_SCHEMA)
     except (ValidationError, SchemaError) as e:
-        app.logger.exception(f"Validation error in repo_create_s3: {e.message}")
+        logging.exception(f"Validation error in repo_create_s3: {e.message}")
         return app.response_class(
             response=json.dumps({"status": "error", "message": e.message}),
             status=400,
@@ -227,14 +228,14 @@ def project_create_s3() -> Response:
     try:
         object_info = s3bucket.create_project(project_name)
     except ConnectionToMinioError:
-        app.logger.exception(f"Can't connect to minio server")
+        logging.exception(f"Can't connect to minio server")
         return app.response_class(
             response=json.dumps({"status": "error", "message": "Can't connect to minio server or create project"}),
             status=504,
             mimetype="application/json"
         )
     except ObjectExistsError:
-        app.logger.exception(f"Project exists")
+        logging.exception(f"Project exists")
         return app.response_class(
             response=json.dumps({"status": "error", "message": "project exists"}),
             status=409,
@@ -258,7 +259,7 @@ def repo_create_s3(project_key: str) -> Response:
     try:
         validate(request_data, REPO_CREATE_S3_SCHEMA)
     except (ValidationError, SchemaError) as e:
-        app.logger.exception(f"Validation error in repo_create_s3: {e.message}")
+        logging.exception(f"Validation error in repo_create_s3: {e.message}")
         return app.response_class(
             response=json.dumps({"status": "error", "message": e.message}),
             status=400,
@@ -269,14 +270,14 @@ def repo_create_s3(project_key: str) -> Response:
     try:
         object_info = s3bucket.create_repo(project_key, repo_name)
     except ConnectionToMinioError:
-        app.logger.exception(f"Can't connect to minio server")
+        logging.exception(f"Can't connect to minio server")
         return app.response_class(
             response=json.dumps({"status": "error", "message": "Can't connect to minio server or create repo"}),
             status=504,
             mimetype="application/json"
         )
     except ObjectExistsError:
-        app.logger.exception(f"Repo exists")
+        logging.exception(f"Repo exists")
         return app.response_class(
             response=json.dumps({"status": "error", "message": "repo exists"}),
             status=409,
@@ -298,7 +299,7 @@ def upload_multiple_files_s3(project_key: str, repo_slug: str) -> Response:
     try:
         old_items = s3bucket.list_objects_names(project_key, repo_slug)
     except ConnectionToMinioError:
-        app.logger.exception(f"Can't connect to minio server and list objects")
+        logging.exception(f"Can't connect to minio server and list objects")
         return app.response_class(
             response=json.dumps({"status": "error", "message": "Can't connect to minio server or list objects"}),
             status=504,
@@ -315,7 +316,7 @@ def upload_multiple_files_s3(project_key: str, repo_slug: str) -> Response:
     for file_object in request.files.getlist('file'):
         file_name = file_object.filename
         if not file_name:
-            app.logger.info('No filename error')
+            logging.info('No filename error')
             file_status['error'].append(file_name)
             continue
         try:
@@ -329,7 +330,7 @@ def upload_multiple_files_s3(project_key: str, repo_slug: str) -> Response:
         upload_state = {'status': 'ok', 'message': object_info.as_dict()}
         if upload_state.get('status') == 'error':
             file_status['error'].append(file_name)
-            app.logger.debug(json.dumps(upload_state.get('message')))
+            logging.debug(json.dumps(upload_state.get('message')))
             continue
         if file_name in old_items_names:
             file_status['replaced'].append(file_name)
@@ -358,7 +359,7 @@ def remove_file_s3(project_key: str, repo_slug: str, filename: str) -> Response:
     try:
         s3bucket.remove_object(object_name=object_name)
     except Exception as e:
-        app.logger.exception(f"Can't connect to minio server or remove file: {e}")
+        logging.exception(f"Can't connect to minio server or remove file: {e}")
         return app.response_class(
             response=json.dumps({"status": "error", "message": "Can't connect to minio server or remove file"}),
             status=504,
@@ -385,7 +386,7 @@ def delete_version(project_key: str, repo_slug: str, filename: str, version: str
             mimetype="application/json"
         )
     except NotSupportedMethodError as e:
-        app.logger.exception(f"Method not supported in none versioning mode: {e}")
+        logging.exception(f"Method not supported in none versioning mode: {e}")
         return app.response_class(
             response=json.dumps({"status": "error", "message": "Method not supported in none versioning mode"}),
             status=405,
@@ -418,14 +419,14 @@ def remove_old_files_s3(project_key: str, repo_slug: str, filename: str) -> Resp
             mimetype="application/json"
         )
     except NotSupportedMethodError as e:
-        app.logger.exception(f"Method not supported in none versioning mode: {e}")
+        logging.exception(f"Method not supported in none versioning mode: {e}")
         return app.response_class(
             response=json.dumps({"status": "error", "message": "Method not supported in none versioning mode"}),
             status=405,
             mimetype="application/json"
         )
     except Exception as e:
-        app.logger.exception(f"Unexpected error: {str(e)}")
+        logging.exception(f"Unexpected error: {str(e)}")
         return app.response_class(
             response=json.dumps({"status": "error", "message": f"Unexpected error: {str(e)}"}),
             status=400,
@@ -453,7 +454,7 @@ def delete_object_s3(project_key: str, repo_slug: str, filename: str) -> Respons
     try:
         s3bucket.remove_object(object_name=object_name)
     except Exception as e:
-        app.logger.exception(f"Can't connect to minio server or remove file: {e}")
+        logging.exception(f"Can't connect to minio server or remove file: {e}")
         return app.response_class(
             response=json.dumps({"status": "error", "message": "Can't connect to minio server or remove file"}),
             status=504,
@@ -477,14 +478,14 @@ def create_repo_copy_s3(project_key: str, repo_slug: str, project_new_key: str, 
     try:
         objects = s3bucket.list_objects_names(project_key, repo_slug, True)
     except Exception as e:
-        app.logger.exception(f"Can't connect to minio server or remove file: {e}")
+        logging.exception(f"Can't connect to minio server or remove file: {e}")
         return app.response_class(
             response=json.dumps({"status": "error", "message": "Can't connect to minio server or remove file"}),
             status=504,
             mimetype="application/json"
         )
     if not objects:
-        app.logger.exception(f"no source project/repo {project_key}/{repo_slug}")
+        logging.exception(f"no source project/repo {project_key}/{repo_slug}")
         return app.response_class(
             response=json.dumps({"status": "error", "message": f"no source project/repo {project_key}/{repo_slug}"}),
             status=504,
@@ -494,14 +495,14 @@ def create_repo_copy_s3(project_key: str, repo_slug: str, project_new_key: str, 
     try:
         new_objects = s3bucket.list_objects_names(project_new_key, repo_new_slug, True)
     except Exception as e:
-        app.logger.exception(f"Can't connect to minio server or remove file: {e}")
+        logging.exception(f"Can't connect to minio server or remove file: {e}")
         return app.response_class(
             response=json.dumps({"status": "error", "message": "Can't connect to minio server or remove file"}),
             status=504,
             mimetype="application/json"
         )
     if len(new_objects) > 0:
-        app.logger.exception(f"Destination path {project_new_key}/{repo_new_slug} is not empty")
+        logging.exception(f"Destination path {project_new_key}/{repo_new_slug} is not empty")
         return app.response_class(
             response=json.dumps({"status": "error", "message": f"Destination path {project_new_key}/{repo_new_slug} "
                                                                f"is not empty"}),
@@ -513,7 +514,7 @@ def create_repo_copy_s3(project_key: str, repo_slug: str, project_new_key: str, 
             s3bucket.copy_object(f'{project_key}/{repo_slug}/{object_name}',
                                  f'{project_new_key}/{repo_new_slug}/{object_name}')
         except Exception as e:
-            app.logger.warning(e)
+            logging.warning(e)
 
     return app.response_class(
         response=json.dumps({'href': f"{BASE_URL}/{project_new_key}"}),
@@ -534,21 +535,21 @@ def replace_object_s3(project_key: str, repo_slug: str, filename: str) -> Respon
         # replace object for hitachi s3. Hitachi can't replace object, firstly need to delete.
         _ = s3bucket.upload_file_object(project_key, repo_slug, file_object, filename)
     except ConnectionToMinioError as e:
-        app.logger.exception(f"Can't connect to minio server and upload objects: {e}")
+        logging.exception(f"Can't connect to minio server and upload objects: {e}")
         return app.response_class(
             response=json.dumps({"status": "error", "message": "Can't connect to minio server and upload objects"}),
             status=504,
             mimetype="application/json"
         )
     except MinioEmptyFileError as e:
-        app.logger.exception(f"File not exists error: {e}")
+        logging.exception(f"File not exists error: {e}")
         return app.response_class(
             response=json.dumps({"status": "error", "message": "File not exists"}),
             status=400,
             mimetype="application/json"
         )
     except Exception as e:
-        app.logger.exception(f"Unexpected error: {e}")
+        logging.exception(f"Unexpected error: {e}")
         return app.response_class(
             response=json.dumps({"status": "error", "message": "Unexpected error"}),
             status=400,
@@ -573,28 +574,28 @@ def list_object_versions_s3(project_key: str, repo_slug: str, filename: str) -> 
         object_path = '/'.join([project_key, repo_slug])
         objects = s3bucket.get_object_version_list(object_path, filename)
     except ConnectionToMinioError as e:
-        app.logger.exception(f"Can't connect to minio server and upload objects: {e}")
+        logging.exception(f"Can't connect to minio server and upload objects: {e}")
         return app.response_class(
             response=json.dumps({"status": "error", "message": "Can't connect to minio server and upload objects"}),
             status=504,
             mimetype="application/json"
         )
     except MinioEmptyFileError as e:
-        app.logger.exception(f"File not exists error: {e}")
+        logging.exception(f"File not exists error: {e}")
         return app.response_class(
             response=json.dumps({"status": "error", "message": "File not exists"}),
             status=400,
             mimetype="application/json"
         )
     except NotSupportedMethodError as e:
-        app.logger.exception(f"Method not supported in none versioning mode: {e}")
+        logging.exception(f"Method not supported in none versioning mode: {e}")
         return app.response_class(
             response=json.dumps({"status": "error", "message": "Method not supported in none versioning mode"}),
             status=405,
             mimetype="application/json"
         )
     except Exception as e:
-        app.logger.exception(f"Unexpected error: {e}")
+        logging.exception(f"Unexpected error: {e}")
         return app.response_class(
             response=json.dumps({"status": "error", "message": "Unexpected error"}),
             status=400,
@@ -615,7 +616,7 @@ def get_repo_link_s3(project_key: str, repo_slug: str) -> Response:
     try:
         s3_object_count = s3bucket.count_objects_by_path(object_path)
     except ConnectionToMinioError:
-        app.logger.exception(f"Can't connect to minio server and list objects")
+        logging.exception(f"Can't connect to minio server and list objects")
         return app.response_class(
             response=json.dumps({"status": "error", "message": "Can't connect to minio server or list objects"}),
             status=504,
@@ -656,7 +657,7 @@ def rollback(project_key: str, repo_slug: str, filename: str, version: str):
             mimetype="application/json"
         )
     except NotSupportedMethodError as e:
-        app.logger.exception(f"Method not supported in none versioning mode: {e}")
+        logging.exception(f"Method not supported in none versioning mode: {e}")
         return app.response_class(
             response=json.dumps({"status": "error", "message": "Method not supported in none versioning mode"}),
             status=405,
@@ -683,15 +684,15 @@ def get_file_version_s3(project_key: str, repo_slug: str, filename: str, version
     try:
         file_object = s3bucket.get_object(file_name, version_id=version)
     except ObjectNotExistsError:
-        app.logger.warning("Can't get object")
+        logging.warning("Can't get object")
         return app.response_class(
             response=json.dumps({"status": "error", "message": "Object is not exists"}),
             status=404,
             mimetype="application/json"
         )
     except Exception as e:
-        app.logger.warning("Unexpected error")
-        app.logger.warning(e)
+        logging.warning("Unexpected error")
+        logging.warning(e)
         return app.response_class(
             response=json.dumps({"status": "error", "message": str(e)}),
             status=404,
@@ -718,15 +719,15 @@ def get_file_version_list_s3(project_key: str, repo_slug: str, filename: str) ->
             mimetype="application/json"
         )
     except NotSupportedMethodError as e:
-        app.logger.exception(f"Method not supported in none versioning mode: {e}")
+        logging.exception(f"Method not supported in none versioning mode: {e}")
         return app.response_class(
             response=json.dumps({"status": "error", "message": "Method not supported in none versioning mode"}),
             status=405,
             mimetype="application/json"
         )
     except Exception as e:
-        app.logger.warning("Unexpected error")
-        app.logger.warning(e)
+        logging.warning("Unexpected error")
+        logging.warning(e)
         return app.response_class(
             response=json.dumps({"status": "error", "message": str(e)}),
             status=400,
@@ -751,7 +752,7 @@ def upload_by_url():
     try:
         validate(request_data, DOWNLOAD_URL_SCHEMA)
     except (ValidationError, SchemaError) as e:
-        app.logger.exception(f"Validation error in upload_by_url: {e.message}")
+        logging.exception(f"Validation error in upload_by_url: {e.message}")
         return app.response_class(
             response=json.dumps({"status": "error", "message": e.message}),
             status=400,
@@ -770,14 +771,14 @@ def upload_by_url():
         download_saver(s3bucket, reader, object_path=object_path)
         # reader.close()  # нужно закрывать если объект не был вычитан полностью
     except ConnectionToMinioError:
-        app.logger.exception(f"Can't connect to minio server")
+        logging.exception(f"Can't connect to minio server")
         return app.response_class(
             response=json.dumps({"status": "error", "message": "Can't connect to minio server or create project"}),
             status=504,
             mimetype="application/json"
         )
     except Exception as e:
-        app.logger.exception(e)
+        logging.exception(e)
         return app.response_class(
             response=json.dumps({"status": "error", "message": str(e)}),
             status=400,
@@ -799,14 +800,14 @@ def delete_repo_s3(project_key: str, repo_slug: str) -> Response:
     try:
         s3bucket.remove_repo(project_key, repo_slug)
     except NotEmptyRepoError:
-        app.logger.exception(f"Can't remove repo, not empty")
+        logging.exception(f"Can't remove repo, not empty")
         return app.response_class(
             response=json.dumps({"status": "error", "message": "Can't remove repo, not empty"}),
             status=409,
             mimetype="application/json"
         )
     except Exception as e:
-        app.logger.exception(f"Unexpected error: {e}")
+        logging.exception(f"Unexpected error: {e}")
         return app.response_class(
             response=json.dumps({"status": "error", "message": f"Unexpected error {str(e)}"}),
             status=400,
@@ -826,14 +827,14 @@ def delete_project_s3(project_key: str) -> Response:
     try:
         s3bucket.remove_project(project_key)
     except NotEmptyProjectError:
-        app.logger.exception(f"Can't remove project, not empty")
+        logging.exception(f"Can't remove project, not empty")
         return app.response_class(
             response=json.dumps({"status": "error", "message": "Can't remove project, not empty"}),
             status=409,
             mimetype="application/json"
         )
     except Exception as e:
-        app.logger.exception(f"Unexpected error: {e}")
+        logging.exception(f"Unexpected error: {e}")
         return app.response_class(
             response=json.dumps({"status": "error", "message": f"Unexpected error {str(e)}"}),
             status=400,
@@ -849,7 +850,7 @@ def delete_project_s3(project_key: str) -> Response:
 @app.route('/s3/clean_versions', methods=['GET'])
 def clean_versions_s3() -> Response:
     if VERSIONING.lower() != "native":  # TODO: сделать нормальную проверку
-        app.logger.exception(f"Not supported method if versioning is off")
+        logging.exception(f"Not supported method if versioning is off")
         return app.response_class(
             response=json.dumps({"status": "error", "message": "Not supported method if versioning is off"}),
             status=409,
@@ -860,7 +861,7 @@ def clean_versions_s3() -> Response:
     cache = Cache("clean_versions", "CLEANING", redis_db=3)
     cache_data = cache.get_by_data()
     if cache_data[1] == CacheStatus.Blocked.value:
-        app.logger.exception(f"Cleaning versions in progress")
+        logging.exception(f"Cleaning versions in progress")
         return app.response_class(
             response=json.dumps({"status": "error", "message": "Cleaning versions in progress"}),
             status=409,
@@ -872,7 +873,7 @@ def clean_versions_s3() -> Response:
         s3bucket.clean_versions()
     except VersioningCleanRulesError:
         cache.save_cache(CacheStatus.UnexpectedError, ttl)
-        app.logger.exception(f"Versioning clean rules not set or incorrect")
+        logging.exception(f"Versioning clean rules not set or incorrect")
         return app.response_class(
             response=json.dumps({"status": "error", "message": "Versioning clean rules not set or incorrect"}),
             status=409,
@@ -880,7 +881,7 @@ def clean_versions_s3() -> Response:
         )
     except Exception as e:
         cache.save_cache(CacheStatus.UnexpectedError, ttl)
-        app.logger.exception(f"Unexpected error: {str(e)}")
+        logging.exception(f"Unexpected error: {str(e)}")
         return app.response_class(
             response=json.dumps({"status": "error", "message": f"Unexpected error {str(e)}"}),
             status=400,

@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import sys
+import logging
 
 from app import app
 from app.config import *
@@ -26,12 +27,12 @@ from datetime import datetime, timedelta
 def webhook():
     if request.method == 'POST':
         data = request.get_json()
-        app.logger.info(data['user'])
+        logging.info(data['user'])
     return 'OK'
 
 
 def create_issue(project_key, summary, description, issuetype, estimated_time, epic_key=False):
-    app.logger.info("SUM JIRA START create_issue operation: {}".format(datetime.today().strftime("%Y-%m-%d %H:%M:%S")))
+    logging.info("SUM JIRA START create_issue operation: {}".format(datetime.today().strftime("%Y-%m-%d %H:%M:%S")))
     url = jira_base_url + '/issue'
     # history creation:
     if epic_key is not False:
@@ -81,12 +82,12 @@ def create_issue(project_key, summary, description, issuetype, estimated_time, e
             }
         }
     r = requests.post(url, json=request_data, headers={'Authorization': 'Basic ' + jira_authorization})
-    app.logger.info("SUM JIRA END create_issue operation: {}".format(datetime.today().strftime("%Y-%m-%d %H:%M:%S")))
+    logging.info("SUM JIRA END create_issue operation: {}".format(datetime.today().strftime("%Y-%m-%d %H:%M:%S")))
     return r
 
 
 def find_epic_key(project_key, epic_name, story_summary):
-    app.logger.info("SUM JIRA START find_epic_key operation: {}".format(datetime.today().strftime("%Y-%m-%d %H:%M:%S")))
+    logging.info("SUM JIRA START find_epic_key operation: {}".format(datetime.today().strftime("%Y-%m-%d %H:%M:%S")))
     url = jira_base_url + '/search'
     request_data = {
         "jql": "project = " + project_key + " AND summary ~ " + epic_name,
@@ -101,18 +102,18 @@ def find_epic_key(project_key, epic_name, story_summary):
     r = requests.post(url, json=request_data, headers={'Authorization': 'Basic ' + jira_authorization})
     epic_key = False
     for i in r.json()["issues"]:
-        app.logger.info("We are inside of for loop for story_summary")
+        logging.info("We are inside of for loop for story_summary")
         # check for story summary with the same name
         if i["fields"]["summary"] == story_summary:
-            app.logger.info("find_epic_key: found issue for this summary")
+            logging.info("find_epic_key: found issue for this summary")
             return 1
         # remember epic_key
         #if i["fields"]["issuetype"]["name"] == "Epic":
         # check for i["fields"]["issuetype"]["name"] is "Epic" -- but via id. Epic id is 10002
         if i["fields"]["issuetype"]["id"] == "10002":
             epic_key = i["key"]
-            app.logger.info("epic_key is :{}".format(epic_key))
-    app.logger.info("SUM JIRA END find_epic_key operation: {}".format(datetime.today().strftime("%Y-%m-%d %H:%M:%S")))
+            logging.info("epic_key is :{}".format(epic_key))
+    logging.info("SUM JIRA END find_epic_key operation: {}".format(datetime.today().strftime("%Y-%m-%d %H:%M:%S")))
     if epic_key:
         return epic_key
     else:
@@ -122,10 +123,10 @@ def find_epic_key(project_key, epic_name, story_summary):
 # Create story on jira
 @app.route('/jira/<string:project_key>/<string:epic_name>/story/create', methods=['POST'])
 def create_story(project_key, epic_name):
-    app.logger.info("SUM JIRA START create_story operation: {}".format(datetime.today().strftime("%Y-%m-%d %H:%M:%S")))
+    logging.info("SUM JIRA START create_story operation: {}".format(datetime.today().strftime("%Y-%m-%d %H:%M:%S")))
     if project_key == 'key':
         project_key = "MODELOPS"
-    app.logger.info("project_key is {}, epic_name is {}".format(project_key, epic_name))
+    logging.info("project_key is {}, epic_name is {}".format(project_key, epic_name))
     if " " in epic_name:
         return {"status": "Wrong Epic name -- there should be no spaces in name"}
     request_data = request.get_json()
@@ -145,7 +146,7 @@ def create_story(project_key, epic_name):
             "issuetype"
         ]
     }
-    app.logger.info("search request")
+    logging.info("search request")
     #try:
     r = requests.post(url, json=request_data_jira, headers={'Authorization': 'Basic ' + jira_authorization})
     #    return r
@@ -157,23 +158,23 @@ def create_story(project_key, epic_name):
         return {"status": "Create story request operation failed with status code 500", "message": r.json()}
     elif r.status_code == 200:
         if r.json()["total"] == 0:
-            app.logger.info("create epic")
+            logging.info("create epic")
             r = create_issue(project_key, epic_name, request_data["epic_description"], "Epic", estimated_time)
             if r.status_code != 201:
                 return {"status": "Create epic " + epic_name + " operation failed", "message": r.json()}
-        app.logger.info("find epic_key")
+        logging.info("find epic_key")
         epic_key = find_epic_key(project_key, epic_name, request_data["story_summary"])
         if epic_key == 0:
-            app.logger.info("Epic_key search operation failed")
+            logging.info("Epic_key search operation failed")
         elif epic_key == 1:
             return {"status": "Story with the same story summary already exist"}
-        app.logger.info("create story")
+        logging.info("create story")
         try:
             r = create_issue(project_key, request_data["story_summary"], request_data["story_description"] + \
                              '\r\n' + "--------------------" + '\r\n' + "*External links:*" + '\r\n' + '\r\n  '.join(request_data["external_links"]), "Story", estimated_time, epic_key)
         except:
             r = create_issue(project_key, request_data["story_summary"], request_data["story_description"], "Story", estimated_time, epic_key)
-        app.logger.info("SUM JIRA END create_story operation: {}".format(datetime.today().strftime("%Y-%m-%d %H:%M:%S")))
+        logging.info("SUM JIRA END create_story operation: {}".format(datetime.today().strftime("%Y-%m-%d %H:%M:%S")))
         if r.status_code == 201:
             if 'links' in request_data:
                 story_name = r.json()['key']
@@ -188,12 +189,12 @@ def create_story(project_key, epic_name):
 # Assign issue to user
 @app.route('/jira/issue/<string:issue_key>/assignee', methods=['POST'])
 def assign_issue_to_user(issue_key):
-    app.logger.info("SUM JIRA START assign_issue_to_user operation: {}".format(datetime.today().strftime("%Y-%m-%d %H:%M:%S")))
+    logging.info("SUM JIRA START assign_issue_to_user operation: {}".format(datetime.today().strftime("%Y-%m-%d %H:%M:%S")))
     url = jira_base_url + '/issue/' + issue_key + '/assignee'
     # url = 'http://84.201.157.251:8080/rest/api/2/issue/TEST1-7/assignee'
     request_data = request.get_json()
     r = requests.put(url, json=request_data, headers={'Authorization': 'Basic ' + jira_authorization})
-    app.logger.info("SUM JIRA END assign_issue_to_user operation: {}".format(datetime.today().strftime("%Y-%m-%d %H:%M:%S")))
+    logging.info("SUM JIRA END assign_issue_to_user operation: {}".format(datetime.today().strftime("%Y-%m-%d %H:%M:%S")))
     if r.status_code == 204:
         return {'status': 'ok'}
     else:
@@ -262,9 +263,9 @@ def attach_file_to_issue(issue_key: str, files: list):
                     downloaded_file = download_file_from_bitbucket(file)
                 except Exception as exp:
                     failed_download_files.append(file)
-                    app.logger.exception(f'failed to download file {file} from bitbucket, traceback:')
+                    logging.exception(f'failed to download file {file} from bitbucket, traceback:')
                     traceback.print_tb(exp.__traceback__)
-                    app.logger.debug((type(exp), exp))
+                    logging.debug((type(exp), exp))
                     continue
                 #filename = file['filename']
                 filename = file.rsplit('/', maxsplit=1)[-1].split('?raw')[0]
@@ -286,21 +287,21 @@ def attach_file_to_issue(issue_key: str, files: list):
             else:
                 r = upload_file_to_jira(issue_key, filename, downloaded_file['byte_content'])
     except BitbucketFileDoestNotExist as bitbucket_exp:
-        app.logger.warning(bitbucket_exp)
+        logging.warning(bitbucket_exp)
         error_message = '\n' + str(bitbucket_exp.url)
         error_message = "\n" + f'*failed to upload the following file:* {error_message}'
         edit_issue(issue_key, 'description', error_message)
         return {"status": bitbucket_exp.get_status(), "message": bitbucket_exp.get_message()}
     except JiraUploadManyFilesAsZipError as jira_many_exp:
-        app.logger.warning(jira_many_exp)
+        logging.warning(jira_many_exp)
         res = upload_many_files_to_jira(issue_key, files_contents)
         return {'status': 'ok', 'message': res}
     except JiraUploadFileAsZipError as jira_single_exp:
-        app.logger.warning(jira_single_exp)
+        logging.warning(jira_single_exp)
         r = upload_file_to_jira(issue_key, filename, downloaded_file['byte_content'])
     except Exception as exp:
         traceback.print_tb(exp.__traceback__)
-        app.logger.warning((type(exp), exp))
+        logging.warning((type(exp), exp))
         return {"status": "Attach file to story operation failed", "message": "Something went wrong"}
     if r.status_code == 200:
         return {"status": "ok", "message": r.json()}
