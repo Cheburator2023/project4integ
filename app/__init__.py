@@ -1,4 +1,3 @@
-import socket
 from flask import Flask, jsonify, request, render_template
 from logging.config import dictConfig
 from pathlib import Path
@@ -22,28 +21,29 @@ os.environ['PYTHONWARNINGS'] = 'ignore:Unverified HTTPS request'
 UPLOAD_FOLDER = '/home/user/tmp'
 NOT_ALLOWED_EXTENSIONS = {'exe', 'ppk'}
 
+# Конфигурация логирования
 log_config = {
     "version": 1,
     "disable_existing_loggers": False,
     "formatters": {
-        "logText": {
-            "format": "[%(asctime)s] [%(process)d] [%(levelname)s] in %(module)s: %(message)s",
-            "datefmt": "%d-%m-%Y %H:%M:%S"
-        },
-        "logJSON": {
+        "tslg": {
             "()": "app.tslg_logging.TSLGJSONLogFormatter"
         }
     },
     "handlers": {
-        "wsgi": {
+        "console": {
             "class": "logging.StreamHandler",
             "stream": "ext://flask.logging.wsgi_errors_stream",
-            "formatter": "logText",
+            "formatter": "tslg",
         }
     },
-    "root": {"level": logging_level, "handlers": ["wsgi"]},
+    "root": {
+        "level": logging_level,
+        "handlers": ["console"]
+    },
 }
 
+# Добавляем файловый handler если указана директория для логов
 if logs_directory:
     logs_dir: Path = Path(logs_directory)
     if not logs_dir.exists():
@@ -53,15 +53,17 @@ if logs_directory:
     file_handler = {
         handler_name: {
             "class": "logging.FileHandler",
-            "formatter": "logJSON",
+            "formatter": "tslg",
             "filename": str(log_file_name),
         }
     }
     log_config["handlers"].update(file_handler)
     log_config["root"]["handlers"].append(handler_name)
 
+# Применяем конфигурацию
 dictConfig(log_config)
 
+# Создаем и настраиваем TSLG handler для отправки в сервис логирования
 log_queue = queue.Queue(maxsize=10000)
 
 tslg_handler = TSLGBufferedSocketHandler(
@@ -82,6 +84,7 @@ tslg_handler.setLevel(getattr(logging, tslg_log_level, logging.INFO))
 tslg_formatter = TSLGJSONLogFormatter()
 tslg_handler.setFormatter(tslg_formatter)
 
+# Настраиваем асинхронную отправку через очередь
 queue_listener = QueueListener(log_queue, tslg_handler)
 queue_listener.start()
 
@@ -93,25 +96,11 @@ root_logger.addHandler(queue_handler)
 if os.getenv('TSLG_CONSOLE_OUTPUT', 'true').lower() == 'true':
     root_logger.addHandler(tslg_handler)
 
-# Тестирование подключения TSLG
-try:
-    test_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    test_socket.settimeout(5)
-    test_socket.connect((os.getenv('TSLG_AGENT_HOST', 'tslg-agent-svc-main.dk1-sumd01-sumd-core.svc.cluster.local'),
-                        int(os.getenv('TSLG_AGENT_PORT', '5170'))))
-    test_socket.close()
-    root_logger.info("TSLG agent connection test: SUCCESS")
-except Exception as e:
-    root_logger.error(f"TSLG agent connection test: FAILED - {str(e)}")
-
 app = Flask(__name__)
 
-kubernetes_namespace = os.environ.get('KUBERNETES_NAMESPACE', 'unknown')
-pod_name = os.environ.get('POD_NAME', 'unknown')
-node_name = os.environ.get('NODE_NAME', 'unknown')
-
-root_logger.info(f"Application started - TSLG test log")
-root_logger.info(f"Kubernetes: {pod_name} on {node_name}")
+app.logger.info("TSLG logging configured successfully")
+app.logger.info(f"TSLG Agent: {os.getenv('TSLG_AGENT_HOST')}:{os.getenv('TSLG_AGENT_PORT')}")
+app.logger.info(f"Buffer size: {os.getenv('TSLG_MAX_BUFFER_SIZE')}, Flush interval: {os.getenv('TSLG_BUFFER_FLUSH_INTERVAL_MS')}ms")
 
 # To allow flask propagating exception even if debug is set to false on integration_services
 app.config['PROPAGATE_EXCEPTIONS'] = True

@@ -5,9 +5,9 @@ import uuid
 import os
 import time
 import threading
-import random
 from datetime import datetime
-from queue import Queue, Empty
+import random
+import re
 
 class TSLGBufferedSocketHandler(logging.Handler):
     def __init__(self, host, port, max_buffer_size=500, flush_interval_ms=100,
@@ -28,68 +28,71 @@ class TSLGBufferedSocketHandler(logging.Handler):
         self.socket = None
         self.connection_start_time = 0
         self.connection_attempts = 0
+        self._shutdown = False
 
+        # Запускаем фоновые потоки
         self.flush_thread = threading.Thread(target=self._flush_worker, daemon=True)
+        self.health_check_thread = threading.Thread(target=self._health_check_worker, daemon=True)
         self.flush_thread.start()
+        self.health_check_thread.start()
 
-    def _sanitize_data(self, data):
-        """Санитизация чувствительных данных"""
-        sanitize_enabled = os.getenv('TSLG_SANITIZE_SENSITIVE_DATA', 'true').lower() == 'true'
-        sanitize_percentage = int(os.getenv('TSLG_SANITIZE_PERCENTAGE', '60'))
+    def _should_reconnect(self):
+        """Проверка необходимости переподключения для балансировки"""
+        if not self.socket:
+            return True
 
-        if not sanitize_enabled:
-            return data
+        current_time = time.time()
+        connection_age = (current_time - self.connection_start_time) * 1000
 
-        if isinstance(data, str) and data.strip():
-            chars = list(data)
-            num_to_sanitize = int(len(chars) * sanitize_percentage / 100)
-            if num_to_sanitize > 0:
-                indices = random.sample(range(len(chars)), min(num_to_sanitize, len(chars)))
-                for idx in indices:
-                    chars[idx] = '*'
-                return ''.join(chars)
-        return data
+        # Переподключаемся каждые 2 секунды для балансировки
+        if connection_age >= self.connection_ttl_ms:
+            return True
+
+        return False
+
+    def _health_check_worker(self):
+        """Фоновая проверка здоровья соединения и балансировка"""
+        while not self._shutdown:
+            try:
+                if self._should_reconnect():
+                    if self.socket:
+                        try:
+                            self.socket.close()
+                        except:
+                            pass
+                        self.socket = None
+                    self._create_socket()
+
+                time.sleep(0.5)  # Проверяем каждые 500мс
+            except Exception as e:
+                logging.debug(f"TSLG health check error: {e}")
 
     def _create_socket(self):
         """Создание нового сокет-соединения"""
         try:
-            if self.socket:
-                try:
-                    self.socket.close()
-                except:
-                    pass
-
-            print(f"TSLG: Creating new connection to {self.host}:{self.port}")
             self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self.socket.settimeout(self.socket_timeout_ms / 1000.0)
             self.socket.connect((self.host, self.port))
             self.connection_start_time = time.time()
             self.connection_attempts = 0
-            print(f"TSLG: Successfully connected to {self.host}:{self.port}")
             return True
         except Exception as e:
             self.connection_attempts += 1
-            print(f"TSLG: Connection error: {e}")
             if self.connection_attempts >= self.max_connection_attempts:
-                logging.error(f"TSLG Max connection attempts reached: {e}")
+                self.handleError(f"Max connection attempts reached: {e}")
             return False
 
     def _ensure_connection(self):
         """Проверка и восстановление соединения"""
-        current_time = time.time()
-        connection_age = (current_time - self.connection_start_time) * 1000
+        if not self.socket or self._should_reconnect():
+            return self._create_socket()
 
-        if (not self.socket or
-            connection_age >= self.connection_ttl_ms or
-            self.connection_attempts > 0):
-            print(f"TSLG: Reconnecting to {self.host}:{self.port}, age: {connection_age:.0f}ms, attempts: {self.connection_attempts}")
-
-            if not self._create_socket():
-                print(f"TSLG: Connection failed, retrying in {self.reconnection_delay_ms}ms")
-                time.sleep(self.reconnection_delay_ms / 1000.0)
-                return self._create_socket()
-
-        return self.socket is not None
+        try:
+            # Простая проверка что сокет еще жив
+            self.socket.getpeername()
+            return True
+        except:
+            return self._create_socket()
 
     def _send_batch(self, batch_data):
         """Отправка пачки логов"""
@@ -106,34 +109,33 @@ class TSLGBufferedSocketHandler(logging.Handler):
             self.socket.sendall(log_data.encode('utf-8'))
 
         except Exception as e:
-            logging.error(f"Error sending log batch: {e}")
+            self.socket = None  # Принудительно переподключимся в следующий раз
             time.sleep(self.reconnection_delay_ms / 1000.0)
-            self._create_socket()
 
     def _flush_worker(self):
         """Фоновая задача для периодической отправки буфера"""
-        while True:
-            time.sleep(self.flush_interval_ms / 1000.0)
-            self.flush()
+        while not self._shutdown:
+            try:
+                time.sleep(self.flush_interval_ms / 1000.0)
+                self.flush()
+            except Exception as e:
+                pass
 
     def emit(self, record):
         """Обработка новой записи лога"""
+        if self._shutdown:
+            return
+
         try:
             formatted_record = self.format(record)
 
             with self.buffer_lock:
                 self.buffer.append(formatted_record)
-                current_buffer_size = len(self.buffer)
 
-                if current_buffer_size == int(self.max_buffer_size * 0.5):
-                    print(f"TSLG Buffer at 50%: {current_buffer_size}/{self.max_buffer_size}")
-                elif current_buffer_size == int(self.max_buffer_size * 0.9):
-                    print(f"TSLG Buffer at 90%: {current_buffer_size}/{self.max_buffer_size}")
-
+                # Отправка при заполнении буфера
                 if len(self.buffer) >= self.max_buffer_size:
                     batch_to_send = self.buffer[:]
                     self.buffer = []
-                    print(f"TSLG Buffer full, sending batch of {len(batch_to_send)} logs")
                     threading.Thread(target=self._send_batch, args=(batch_to_send,), daemon=True).start()
 
         except Exception as e:
@@ -149,9 +151,13 @@ class TSLGBufferedSocketHandler(logging.Handler):
 
     def close(self):
         """Закрытие обработчика"""
+        self._shutdown = True
         self.flush()
         if self.socket:
-            self.socket.close()
+            try:
+                self.socket.close()
+            except:
+                pass
         super().close()
 
 class TSLGJSONLogFormatter(logging.Formatter):
@@ -172,7 +178,7 @@ class TSLGJSONLogFormatter(logging.Formatter):
         self.enable_full_context = os.getenv('TSLG_ENABLE_FULL_CONTEXT', 'true').lower() == 'true'
 
         self.app_type = 'PYTHON'
-        self.env_type = 'KUBERNETES'
+        self.env_type = os.getenv('TSLG_ENV_TYPE', 'KUBERNETES')
         self.agr_type = 'TRACING'
 
     def format(self, record):
@@ -189,7 +195,6 @@ class TSLGJSONLogFormatter(logging.Formatter):
             'appType': self.app_type,
             'envType': self.env_type,
             'agrType': self.agr_type,
-            'levelInt': record.levelno,
             'loggerName': record.name,
             'threadName': record.threadName if hasattr(record, 'threadName') else str(record.thread),
             'callerClass': record.module,
@@ -218,7 +223,10 @@ class TSLGJSONLogFormatter(logging.Formatter):
         if self.enable_trace_fields:
             self._add_trace_fields(log_data, record)
 
-        return log_data
+        # Удаляем None значения
+        log_data = {k: v for k, v in log_data.items() if v is not None}
+
+        return json.dumps(log_data, ensure_ascii=False)
 
     def _format_message(self, record):
         """Форматирование основного сообщения"""
@@ -226,16 +234,33 @@ class TSLGJSONLogFormatter(logging.Formatter):
 
         sanitize_enabled = os.getenv('TSLG_SANITIZE_SENSITIVE_DATA', 'true').lower() == 'true'
         if sanitize_enabled and message:
-            sanitize_percentage = int(os.getenv('TSLG_SANITIZE_PERCENTAGE', '60'))
-            chars = list(message)
-            num_to_sanitize = int(len(chars) * sanitize_percentage / 100)
-            if num_to_sanitize > 0:
-                indices = random.sample(range(len(chars)), min(num_to_sanitize, len(chars)))
-                for idx in indices:
-                    chars[idx] = '*'
-                message = ''.join(chars)
+            message = self._sanitize_sensitive_data(message)
 
         return message
+
+    def _sanitize_sensitive_data(self, text):
+        """Улучшенная санитизация чувствительных данных"""
+        if not text or not isinstance(text, str):
+            return text
+
+        # Паттерны для чувствительных данных
+        patterns = {
+            'password': r'("password"\s*:\s*")[^"]*(")',
+            'token': r'("token"\s*:\s*")[^"]*(")',
+            'authorization': r'(Authorization:\s*)[^\s]+',
+            'email': r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b',
+        }
+
+        sanitized_text = text
+        for key, pattern in patterns.items():
+            if key in ['password', 'token']:
+                sanitized_text = re.sub(pattern, r'\1***\2', sanitized_text, flags=re.IGNORECASE)
+            elif key == 'authorization':
+                sanitized_text = re.sub(pattern, r'\1***', sanitized_text, flags=re.IGNORECASE)
+            elif key == 'email':
+                sanitized_text = re.sub(pattern, '***@***.***', sanitized_text)
+
+        return sanitized_text
 
     def _get_mdc_data(self, record):
         """Получение MDC данных из record"""
@@ -267,8 +292,9 @@ class TSLGJSONLogFormatter(logging.Formatter):
             trace_fields['spanId'] = str(uuid.uuid4())[:16]
 
         for field in ['traceId', 'spanId', 'parentSpanId', 'userId', 'logicTime']:
-            if hasattr(record, field):
-                trace_fields[field] = getattr(record, field)
+            value = getattr(record, field, None)
+            if value is not None:
+                trace_fields[field] = value
 
         if trace_fields:
             log_data.update(trace_fields)

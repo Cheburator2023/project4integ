@@ -166,7 +166,7 @@ BASE_URL = os.environ.get('base_is_url', "http://integration-ds1-lpad01-sumd-sys
 ##### namespaces #################
 NAMESPACES = get_namespace_map()
 
-###### TSLG Configuration ##################
+# TSLG Configuration
 tslg_agent_host = os.environ.get('TSLG_AGENT_HOST', 'tslg-agent-svc-main.dk1-sumd01-sumd-core.svc.cluster.local')
 tslg_agent_port = int(os.environ.get('TSLG_AGENT_PORT', '5170'))
 tslg_reconnection_delay_ms = int(os.environ.get('TSLG_RECONNECTION_DELAY_MS', '2000'))
@@ -183,11 +183,10 @@ tslg_buffer_flush_interval_ms = int(os.environ.get('TSLG_BUFFER_FLUSH_INTERVAL_M
 tslg_max_connection_attempts = int(os.environ.get('TSLG_MAX_CONNECTION_ATTEMPTS', '10'))
 
 # TSLG Data Sanitization
-tslg_sanitize_percentage = int(os.environ.get('TSLG_SANITIZE_PERCENTAGE', '60'))
 tslg_sanitize_sensitive_data = get_env_bool('TSLG_SANITIZE_SENSITIVE_DATA', True)
 
 # TSLG Log Level Configuration
-tslg_log_level = os.environ.get('TSLG_LOG_LEVEL', 'INFO')
+tslg_log_level = os.environ.get('TSLG_LOG_LEVEL', 'info')
 
 # Application Logging Configuration
 app_name = os.environ.get('APP_NAME', 'integration')
