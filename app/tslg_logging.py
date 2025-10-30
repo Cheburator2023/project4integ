@@ -178,7 +178,7 @@ class TSLGJSONLogFormatter(logging.Formatter):
         self.enable_full_context = os.getenv('TSLG_ENABLE_FULL_CONTEXT', 'true').lower() == 'true'
 
         self.app_type = 'PYTHON'
-        self.env_type = os.getenv('TSLG_ENV_TYPE', 'KUBERNETES')
+        self.env_type = os.getenv('TSLG_ENV_TYPE', 'K8S')
         self.agr_type = 'TRACING'
 
     def format(self, record):

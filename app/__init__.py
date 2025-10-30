@@ -106,4 +106,18 @@ app.logger.info(f"Buffer size: {os.getenv('TSLG_MAX_BUFFER_SIZE')}, Flush interv
 app.config['PROPAGATE_EXCEPTIONS'] = True
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
+def start_test_message_sender():
+    """Запуск потока для отправки тестовых сообщений каждую секунду"""
+    def send_test_message():
+        while True:
+            time.sleep(1)
+            if os.getenv('TSLG_CONSOLE_OUTPUT', 'true').lower() not in ['false', '0', 'no']:
+                test_message = "Тестовое сообщение сервиса интеграции"
+                app.logger.info(test_message)
+
+    test_thread = threading.Thread(target=send_test_message, daemon=True)
+    test_thread.start()
+
+start_test_message_sender()
+
 from app import mlflow, bitbucket, nexus, jira, teamcity, upload, kafka_rest, s3_minio
