@@ -55,17 +55,52 @@ class TSLGBufferedSocketHandler(logging.Handler):
         while not self._shutdown:
             try:
                 if self._should_reconnect():
-                    if self.socket:
-                        try:
-                            self.socket.close()
-                        except:
-                            pass
-                        self.socket = None
-                    self._create_socket()
-
+                    self._reconnect()
                 time.sleep(0.5)  # Проверяем каждые 500мс
             except Exception as e:
                 logging.debug(f"TSLG health check error: {e}")
+
+    def _reconnect(self):
+        """Безопасное переподключение с отправкой текущего буфера"""
+        if self.socket:
+            try:
+                # Сначала отправляем текущий буфер
+                self._flush_current_buffer()
+                self.socket.close()
+            except:
+                pass
+            finally:
+                self.socket = None
+
+        self._create_socket()
+
+    def _flush_current_buffer(self):
+        """Отправка текущего содержимого буфера"""
+        with self.buffer_lock:
+            if self.buffer:
+                batch_to_send = self.buffer[:]
+                self.buffer = []
+                self._send_batch_sync(batch_to_send)
+
+    def _send_batch_sync(self, batch_data):
+        """Синхронная отправка пачки логов"""
+        if not batch_data:
+            return
+
+        try:
+            if not self._ensure_connection():
+                return
+
+            log_lines = [json.dumps(record, ensure_ascii=False) for record in batch_data]
+            log_data = '\n'.join(log_lines) + '\n'
+
+            self.socket.sendall(log_data.encode('utf-8'))
+
+        except Exception as e:
+            # При ошибке возвращаем данные в буфер
+            with self.buffer_lock:
+                self.buffer = batch_data + self.buffer
+            self.socket = None
 
     def _create_socket(self):
         """Создание нового сокет-соединения"""
@@ -95,20 +130,24 @@ class TSLGBufferedSocketHandler(logging.Handler):
             return self._create_socket()
 
     def _send_batch(self, batch_data):
-        """Отправка пачки логов"""
+        """Асинхронная отправка пачки логов"""
         if not batch_data:
             return
 
         try:
             if not self._ensure_connection():
+                with self.buffer_lock:
+                    self.buffer = batch_data + self.buffer
                 return
 
-            log_lines = [json.dumps(record) for record in batch_data]
+            log_lines = [json.dumps(record, ensure_ascii=False) for record in batch_data]
             log_data = '\n'.join(log_lines) + '\n'
 
             self.socket.sendall(log_data.encode('utf-8'))
 
         except Exception as e:
+            with self.buffer_lock:
+                self.buffer = batch_data + self.buffer
             self.socket = None  # Принудительно переподключимся в следующий раз
             time.sleep(self.reconnection_delay_ms / 1000.0)
 
@@ -147,7 +186,7 @@ class TSLGBufferedSocketHandler(logging.Handler):
             if self.buffer:
                 batch_to_send = self.buffer[:]
                 self.buffer = []
-                threading.Thread(target=self._send_batch, args=(batch_to_send,), daemon=True).start()
+                self._send_batch_sync(batch_to_send)
 
     def close(self):
         """Закрытие обработчика"""
@@ -226,7 +265,7 @@ class TSLGJSONLogFormatter(logging.Formatter):
         # Удаляем None значения
         log_data = {k: v for k, v in log_data.items() if v is not None}
 
-        return json.dumps(log_data, ensure_ascii=False)
+        return log_data
 
     def _format_message(self, record):
         """Форматирование основного сообщения"""
