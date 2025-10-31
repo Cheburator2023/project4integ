@@ -91,8 +91,7 @@ class TSLGBufferedSocketHandler(logging.Handler):
             if not self._ensure_connection():
                 return
 
-            log_lines = [json.dumps(record, ensure_ascii=False) for record in batch_data]
-            log_data = '\n'.join(log_lines) + '\n'
+            log_data = '\n'.join(batch_data) + '\n'
 
             self.socket.sendall(log_data.encode('utf-8'))
 
@@ -140,8 +139,7 @@ class TSLGBufferedSocketHandler(logging.Handler):
                     self.buffer = batch_data + self.buffer
                 return
 
-            log_lines = [json.dumps(record, ensure_ascii=False) for record in batch_data]
-            log_data = '\n'.join(log_lines) + '\n'
+            log_data = '\n'.join(batch_data) + '\n'
 
             self.socket.sendall(log_data.encode('utf-8'))
 
@@ -265,7 +263,7 @@ class TSLGJSONLogFormatter(logging.Formatter):
         # Удаляем None значения
         log_data = {k: v for k, v in log_data.items() if v is not None}
 
-        return log_data
+        return json.dumps(log_data, ensure_ascii=False)
 
     def _format_message(self, record):
         """Форматирование основного сообщения"""
