@@ -92,10 +92,6 @@ root_logger = logging.getLogger()
 queue_handler = QueueHandler(log_queue)
 root_logger.addHandler(queue_handler)
 
-# Добавляем TSLG handler напрямую к root logger для гарантированной доставки
-if os.getenv('TSLG_CONSOLE_OUTPUT', 'true').lower() == 'true':
-    root_logger.addHandler(tslg_handler)
-
 app = Flask(__name__)
 
 app.logger.info("TSLG logging configured successfully")
