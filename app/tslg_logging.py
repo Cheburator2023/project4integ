@@ -8,11 +8,73 @@ import threading
 from datetime import datetime
 import random
 import re
+from typing import Optional
+
+
+class TSLGConnection:
+    """Управляет одним соединением с TSLG агентом"""
+
+    def __init__(self, host: str, port: int, timeout: float):
+        self.host = host
+        self.port = port
+        self.timeout = timeout
+        self.socket: Optional[socket.socket] = None
+        self.created_at = time.time()
+
+    def connect(self) -> bool:
+        """Устанавливает соединение"""
+        try:
+            self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            self.socket.settimeout(self.timeout)
+            self.socket.connect((self.host, self.port))
+            self.created_at = time.time()
+            return True
+        except Exception:
+            self.close()
+            return False
+
+    def send(self, data: bytes) -> bool:
+        """Отправляет данные через соединение"""
+        if not self.socket:
+            return False
+
+        try:
+            self.socket.sendall(data)
+            return True
+        except Exception:
+            self.close()
+            return False
+
+    def is_stale(self, ttl_ms: int) -> bool:
+        """Проверяет, устарело ли соединение"""
+        return (time.time() - self.created_at) * 1000 >= ttl_ms
+
+    def close(self):
+        """Закрывает соединение"""
+        if self.socket:
+            try:
+                self.socket.close()
+            except Exception:
+                pass
+            self.socket = None
+
 
 class TSLGBufferedSocketHandler(logging.Handler):
-    def __init__(self, host, port, max_buffer_size=500, flush_interval_ms=100,
-                 connection_ttl_ms=2000, reconnection_delay_ms=2000,
-                 socket_timeout_ms=5000, max_connection_attempts=10):
+    """
+    Обработчик логов с буферизацией и переподключением для TSLG.
+    """
+
+    def __init__(
+        self,
+        host: str,
+        port: int,
+        max_buffer_size: int = 500,
+        flush_interval_ms: int = 100,
+        connection_ttl_ms: int = 2000,
+        reconnection_delay_ms: int = 2000,
+        socket_timeout_ms: int = 5000,
+        max_connection_attempts: int = 10
+    ):
         super().__init__()
         self.host = host
         self.port = port
@@ -20,134 +82,66 @@ class TSLGBufferedSocketHandler(logging.Handler):
         self.flush_interval_ms = flush_interval_ms
         self.connection_ttl_ms = connection_ttl_ms
         self.reconnection_delay_ms = reconnection_delay_ms
-        self.socket_timeout_ms = socket_timeout_ms
+        self.socket_timeout_ms = socket_timeout_ms / 1000.0
         self.max_connection_attempts = max_connection_attempts
 
         self.buffer = []
         self.buffer_lock = threading.Lock()
-        self.socket = None
-        self.connection_start_time = 0
+        self.connection: Optional[TSLGConnection] = None
         self.connection_attempts = 0
         self._shutdown = False
 
-        # Запускаем фоновые потоки
-        self.flush_thread = threading.Thread(target=self._flush_worker, daemon=True)
-        self.health_check_thread = threading.Thread(target=self._health_check_worker, daemon=True)
+        self._start_background_tasks()
+
+    def _start_background_tasks(self):
+        """Запускает фоновые задачи для отправки и поддержания соединения"""
+        self.flush_thread = threading.Thread(
+            target=self._flush_worker,
+            daemon=True,
+            name="TSLGFlushWorker"
+        )
+        self.health_thread = threading.Thread(
+            target=self._health_check_worker,
+            daemon=True,
+            name="TSLGHealthWorker"
+        )
+
         self.flush_thread.start()
-        self.health_check_thread.start()
+        self.health_thread.start()
 
-    def _should_reconnect(self):
-        """Проверка необходимости переподключения для балансировки"""
-        if not self.socket:
-            return True
+    def _get_connection(self) -> Optional[TSLGConnection]:
+        """Возвращает валидное соединение, при необходимости создает новое"""
+        if self.connection and not self.connection.is_stale(self.connection_ttl_ms):
+            return self.connection
 
-        current_time = time.time()
-        connection_age = (current_time - self.connection_start_time) * 1000
+        if self.connection:
+            self.connection.close()
 
-        # Переподключаемся каждые 2 секунды для балансировки
-        if connection_age >= self.connection_ttl_ms:
-            return True
+        self.connection = TSLGConnection(
+            self.host,
+            self.port,
+            self.socket_timeout_ms
+        )
 
-        return False
-
-    def _health_check_worker(self):
-        """Фоновая проверка здоровья соединения и балансировка"""
-        while not self._shutdown:
-            try:
-                if self._should_reconnect():
-                    self._reconnect()
-                time.sleep(0.5)  # Проверяем каждые 500мс
-            except Exception as e:
-                logging.debug(f"TSLG health check error: {e}")
-
-    def _reconnect(self):
-        """Безопасное переподключение с отправкой текущего буфера"""
-        if self.socket:
-            try:
-                # Сначала отправляем текущий буфер
-                self._flush_current_buffer()
-                self.socket.close()
-            except:
-                pass
-            finally:
-                self.socket = None
-
-        self._create_socket()
-
-    def _flush_current_buffer(self):
-        """Отправка текущего содержимого буфера"""
-        with self.buffer_lock:
-            if self.buffer:
-                batch_to_send = self.buffer[:]
-                self.buffer = []
-                self._send_batch_sync(batch_to_send)
-
-    def _send_batch_sync(self, batch_data):
-        """Синхронная отправка пачки логов"""
-        if not batch_data:
-            return
-
-        try:
-            if not self._ensure_connection():
-                return
-
-            log_data = '\n'.join(batch_data) + '\n'
-
-            self.socket.sendall(log_data.encode('utf-8'))
-
-        except Exception as e:
-            # При ошибке возвращаем данные в буфер
-            with self.buffer_lock:
-                self.buffer = batch_data + self.buffer
-            self.socket = None
-
-    def _create_socket(self):
-        """Создание нового сокет-соединения"""
-        try:
-            self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            self.socket.settimeout(self.socket_timeout_ms / 1000.0)
-            self.socket.connect((self.host, self.port))
-            self.connection_start_time = time.time()
+        if self.connection.connect():
             self.connection_attempts = 0
-            return True
-        except Exception as e:
+            return self.connection
+        else:
             self.connection_attempts += 1
-            if self.connection_attempts >= self.max_connection_attempts:
-                self.handleError(f"Max connection attempts reached: {e}")
+            self.connection = None
+            return None
+
+    def _send_batch(self, batch_data: list) -> bool:
+        """Отправляет пачку логов"""
+        if not batch_data:
+            return True
+
+        connection = self._get_connection()
+        if not connection:
             return False
 
-    def _ensure_connection(self):
-        """Проверка и восстановление соединения"""
-        if not self.socket or self._should_reconnect():
-            return self._create_socket()
-
-        try:
-            # Простая проверка что сокет еще жив
-            self.socket.getpeername()
-            return True
-        except:
-            return self._create_socket()
-
-    def _send_batch(self, batch_data):
-        """Асинхронная отправка пачки логов"""
-        if not batch_data:
-            return
-
-        try:
-            if not self._ensure_connection():
-                with self.buffer_lock:
-                    self.buffer = batch_data + self.buffer
-                return
-
-            log_data = '\n'.join(batch_data) + '\n'
-
-            self.socket.sendall(log_data.encode('utf-8'))
-
-        except Exception as e:
-            with self.buffer_lock:
-                self.buffer = batch_data + self.buffer
-            self.socket = None  # Принудительно переподключимся в следующий раз
-            time.sleep(self.reconnection_delay_ms / 1000.0)
+        log_data = '\n'.join(batch_data) + '\n'
+        return connection.send(log_data.encode('utf-8'))
 
     def _flush_worker(self):
         """Фоновая задача для периодической отправки буфера"""
@@ -155,11 +149,20 @@ class TSLGBufferedSocketHandler(logging.Handler):
             try:
                 time.sleep(self.flush_interval_ms / 1000.0)
                 self.flush()
-            except Exception as e:
+            except Exception:
+                pass
+
+    def _health_check_worker(self):
+        """Фоновая задача для поддержания соединения"""
+        while not self._shutdown:
+            try:
+                self._get_connection()
+                time.sleep(1.0)
+            except Exception:
                 pass
 
     def emit(self, record):
-        """Обработка новой записи лога"""
+        """Обрабатывает запись лога"""
         if self._shutdown:
             return
 
@@ -169,32 +172,37 @@ class TSLGBufferedSocketHandler(logging.Handler):
             with self.buffer_lock:
                 self.buffer.append(formatted_record)
 
-                # Отправка при заполнении буфера
                 if len(self.buffer) >= self.max_buffer_size:
                     batch_to_send = self.buffer[:]
                     self.buffer = []
-                    threading.Thread(target=self._send_batch, args=(batch_to_send,), daemon=True).start()
+                    self._send_batch_async(batch_to_send)
 
         except Exception as e:
             self.handleError(record)
 
+    def _send_batch_async(self, batch_data: list):
+        """Асинхронно отправляет пачку логов"""
+        def send_task():
+            if not self._send_batch(batch_data):
+                with self.buffer_lock:
+                    self.buffer = batch_data + self.buffer
+
+        threading.Thread(target=send_task, daemon=True).start()
+
     def flush(self):
-        """Принудительная отправка буфера"""
+        """Принудительно отправляет буфер"""
         with self.buffer_lock:
             if self.buffer:
                 batch_to_send = self.buffer[:]
                 self.buffer = []
-                self._send_batch_sync(batch_to_send)
+                self._send_batch(batch_to_send)
 
     def close(self):
-        """Закрытие обработчика"""
+        """Корректно закрывает обработчик"""
         self._shutdown = True
         self.flush()
-        if self.socket:
-            try:
-                self.socket.close()
-            except:
-                pass
+        if self.connection:
+            self.connection.close()
         super().close()
 
 class TSLGJSONLogFormatter(logging.Formatter):

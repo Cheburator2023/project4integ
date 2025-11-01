@@ -1,13 +1,8 @@
-from flask import Flask, jsonify, request, render_template
-from logging.config import dictConfig
-from pathlib import Path
-import queue
-from logging.handlers import QueueHandler, QueueListener
+from flask import Flask
 import os
 import functools
 import logging
-from app.config import logging_level, logs_directory
-from app.tslg_logging import TSLGBufferedSocketHandler, TSLGJSONLogFormatter
+from app.logging_manager import LoggingManagerFactory
 
 from requests.packages.urllib3.exceptions import InsecureRequestWarning
 import requests
@@ -21,89 +16,35 @@ os.environ['PYTHONWARNINGS'] = 'ignore:Unverified HTTPS request'
 UPLOAD_FOLDER = '/home/user/tmp'
 NOT_ALLOWED_EXTENSIONS = {'exe', 'ppk'}
 
-# Конфигурация логирования
-log_config = {
-    "version": 1,
-    "disable_existing_loggers": False,
-    "formatters": {
-        "tslg": {
-            "()": "app.tslg_logging.TSLGJSONLogFormatter"
-        }
-    },
-    "handlers": {
-        "console": {
-            "class": "logging.StreamHandler",
-            "stream": "ext://flask.logging.wsgi_errors_stream",
-            "formatter": "tslg",
-        }
-    },
-    "root": {
-        "level": logging_level,
-        "handlers": ["console"]
-    },
-}
+def create_app():
+    """Фабрика для создания приложения Flask"""
+    app = Flask(__name__)
 
-# Добавляем файловый handler если указана директория для логов
-if logs_directory:
-    logs_dir: Path = Path(logs_directory)
-    if not logs_dir.exists():
-        logs_dir.mkdir(parents=True)
-    log_file_name: Path = logs_dir / Path("integration.log")
-    handler_name = 'file'
-    file_handler = {
-        handler_name: {
-            "class": "logging.FileHandler",
-            "formatter": "tslg",
-            "filename": str(log_file_name),
-        }
-    }
-    log_config["handlers"].update(file_handler)
-    log_config["root"]["handlers"].append(handler_name)
+    logging_manager = LoggingManagerFactory.create_from_env()
+    root_logger = logging_manager.setup_logging()
 
-# Применяем конфигурацию
-dictConfig(log_config)
+    app.logging_manager = logging_manager
 
-# Создаем и настраиваем TSLG handler для отправки в сервис логирования
-log_queue = queue.Queue(maxsize=10000)
+    app.config['PROPAGATE_EXCEPTIONS'] = True
+    app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
-tslg_handler = TSLGBufferedSocketHandler(
-    host=os.getenv('TSLG_AGENT_HOST', 'tslg-agent-svc-main.dk1-sumd01-sumd-core.svc.cluster.local'),
-    port=int(os.getenv('TSLG_AGENT_PORT', '5170')),
-    max_buffer_size=int(os.getenv('TSLG_MAX_BUFFER_SIZE', '500')),
-    flush_interval_ms=int(os.getenv('TSLG_BUFFER_FLUSH_INTERVAL_MS', '100')),
-    connection_ttl_ms=int(os.getenv('TSLG_CONNECTION_TTL_MS', '2000')),
-    reconnection_delay_ms=int(os.getenv('TSLG_RECONNECTION_DELAY_MS', '2000')),
-    socket_timeout_ms=int(os.getenv('TSLG_SOCKET_TIMEOUT_MS', '5000')),
-    max_connection_attempts=int(os.getenv('TSLG_MAX_CONNECTION_ATTEMPTS', '10'))
-)
+    app.logger.info("Application logging configured successfully")
+    app.logger.info(f"Log level: {logging_manager.app_config.level}")
+    app.logger.info(f"TSLG Agent: {logging_manager.tslg_config.host}:{logging_manager.tslg_config.port}")
+    app.logger.info(f"TSLG Console Output: {logging_manager.tslg_config.console_output}")
 
-# Устанавливаем уровень логирования из env
-tslg_log_level = os.getenv('TSLG_LOG_LEVEL', 'info').upper()
-tslg_handler.setLevel(getattr(logging, tslg_log_level, logging.INFO))
+    _register_blueprints(app)
 
-tslg_formatter = TSLGJSONLogFormatter()
-tslg_handler.setFormatter(tslg_formatter)
+    return app
 
-# Настраиваем асинхронную отправку через очередь
-queue_listener = QueueListener(log_queue, tslg_handler)
-queue_listener.start()
+def _register_blueprints(app):
+    """Регистрирует все модули приложения"""
+    from app import mlflow, bitbucket, nexus, jira, teamcity, upload, kafka_rest, s3_minio
 
-root_logger = logging.getLogger()
-queue_handler = QueueHandler(log_queue)
-root_logger.addHandler(queue_handler)
+app = create_app()
 
-# Добавляем TSLG handler напрямую к root logger для гарантированной доставки
-if os.getenv('TSLG_CONSOLE_OUTPUT', 'true').lower() == 'true':
-    root_logger.addHandler(tslg_handler)
-
-app = Flask(__name__)
-
-app.logger.info("TSLG logging configured successfully")
-app.logger.info(f"TSLG Agent: {os.getenv('TSLG_AGENT_HOST')}:{os.getenv('TSLG_AGENT_PORT')}")
-app.logger.info(f"Buffer size: {os.getenv('TSLG_MAX_BUFFER_SIZE')}, Flush interval: {os.getenv('TSLG_BUFFER_FLUSH_INTERVAL_MS')}ms")
-
-# To allow flask propagating exception even if debug is set to false on integration_services
-app.config['PROPAGATE_EXCEPTIONS'] = True
-app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
-
-from app import mlflow, bitbucket, nexus, jira, teamcity, upload, kafka_rest, s3_minio
+@app.teardown_appcontext
+def shutdown_logging(exception=None):
+    """Корректно останавливает логирование при завершении приложения"""
+    if hasattr(app, 'logging_manager'):
+        app.logging_manager.shutdown()
