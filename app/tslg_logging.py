@@ -239,12 +239,16 @@ class TSLGJSONLogFormatter(logging.Formatter):
             'callerLine': record.lineno,
         }
 
+        tec_data = {}
         if self.pod_ip:
-            log_data['podIp'] = self.pod_ip
+            tec_data['podIp'] = self.pod_ip
         if self.node_name:
-            log_data['nodeName'] = self.node_name
+            tec_data['nodeName'] = self.node_name
         if self.pod_name:
-            log_data['podName'] = self.pod_name
+            tec_data['podName'] = self.pod_name
+
+        if tec_data:
+            log_data['tec'] = tec_data
 
         mdc = self._get_mdc_data(record)
         if mdc:
