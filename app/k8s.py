@@ -2,6 +2,7 @@ from app import app
 from app.config import *
 
 import uuid
+import logging
 from kubernetes import client
 from kubernetes import config
 
@@ -23,13 +24,13 @@ class Kubernetes:
             all_namespaces.append(ns.metadata.name)
 
         if namespace in all_namespaces:
-            app.logger.info(f"Namespace {namespace} already exists. Reusing.")
+            logging.info(f"Namespace {namespace} already exists. Reusing.")
         else:
             namespace_metadata = client.V1ObjectMeta(name=namespace)
             self.core_api.create_namespace(
                 client.V1Namespace(metadata=namespace_metadata)
             )
-            app.logger.info(f"Created namespace {namespace}.")
+            logging.info(f"Created namespace {namespace}.")
 
         return namespace
 
@@ -48,7 +49,7 @@ class Kubernetes:
         )
 
 
-        app.logger.info(
+        logging.info(
             f"Created container with name: {container.name}, "
             f"image: {container.image} and args: {container.args}"
         )

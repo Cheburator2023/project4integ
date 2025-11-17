@@ -1,6 +1,0 @@
-{{- if .Values.rbac.serviceAccount.newEnabled -}}
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: {{ .Values.rbac.serviceAccount.serviceAccountName }}
-  {{- end }}

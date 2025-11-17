@@ -3,6 +3,7 @@ import random
 import ssl
 import time
 import typing
+import logging
 from ssl import SSLError
 
 import kafka
@@ -52,16 +53,16 @@ def send_message_to_kafka(msg) -> typing.Dict[str, str]:
             producer = get_kafka_producer()
             break
         except Exception as e:
-            app.logger.exception(str(e))
+            logging.exception(str(e))
 
         attempt -= 1
 
         if attempt <= 0:
-            app.logger.error(f"Failed to connect to kafka in {kafka_retries} attempts")
+            logging.error(f"Failed to connect to kafka in {kafka_retries} attempts")
             return {'status': 'error', 'message': 'can not connect to kafka'}
 
         sleep_time = random.randint(kafka_retries_min_time, kafka_retries_max_time)
-        app.logger.warning(f"retry connection to kafka in {sleep_time} seconds")
+        logging.warning(f"retry connection to kafka in {sleep_time} seconds")
         time.sleep(sleep_time)
 
     if producer is None:
@@ -73,13 +74,13 @@ def send_message_to_kafka(msg) -> typing.Dict[str, str]:
         producer.flush()
         producer.close()
         try:
-            app.logger.info("JSON from SUM for send to Kafka")
-            app.logger.debug("message is :{}".format(json.dumps(msg)))
+            logging.info("JSON from SUM for send to Kafka")
+            logging.debug("message is :{}".format(json.dumps(msg)))
         except Exception as e:
-            app.logger.debug(e)
+            logging.debug(e)
         return {'status': 'ok', 'message': 'ok'}
     except Exception as exp:
-        app.logger.exception(exp)
+        logging.exception(exp)
         producer.close()
         return {
             'status': 'error',
@@ -105,13 +106,13 @@ def get_message_from_kafka():
                                  ssl_keyfile=kafka_ssl_keyfile,
                                  ssl_password=kafka_ssl_password)
     except kafka.errors.UnrecognizedBrokerVersion:
-        app.logger.exception("May be a problem with the wrong security protocol")
+        logging.exception("May be a problem with the wrong security protocol")
         return {'status': 'error', 'message': 'May be a problem with the wrong security protocol'}
     except ssl.SSLError:
-        app.logger.exception("May be a problem with the wrong ssl certificate")
+        logging.exception("May be a problem with the wrong ssl certificate")
         return {'status': 'error', 'message': 'May be a problem with the wrong ssl certificate'}
     except Exception:
-        app.logger.exception('')
+        logging.exception('')
         return {'status': 'error', 'message': 'kafka brocker is not available'}
 
     # try to get kafka message
@@ -125,7 +126,7 @@ def get_message_from_kafka():
         consumer.close()
         return {'status': 'ok', 'message': 'kafka message queue is empty'}
     except Exception as exp:
-        app.logger.exception(exp)
+        logging.exception(exp)
         consumer.close()
         return {'status': 'error', 'message': 'send operation failed'}
 
@@ -148,14 +149,14 @@ def send_message():
     try:
         validate(request_data, SEND_MESSAGE_SCHEMA)
     except (ValidationError, SchemaError) as e:
-        app.logger.error(f"Validation error: {e.message}")
+        logging.error(f"Validation error: {e.message}")
         return app.response_class(
             response=json.dumps({"status": "error", "message": e.message}),
             status=400,
             mimetype="application/json"
         )
-    app.logger.info("Sending message to kafka...")
-    app.logger.debug(f"data is: {json.dumps(request_data)}")
+    logging.info("Sending message to kafka...")
+    logging.debug(f"data is: {json.dumps(request_data)}")
     split_and_set_PIM_fields(request_data)
     cache = Cache(redis_pim_namespace, request_data)
     cache.save_cache(CacheStatus.ServiceUnavailable)
@@ -197,8 +198,8 @@ def transit_message_from_kafka_to_sum():
         return calc_hexdigest(data_for_calc)
 
     data = request.get_json(force=True)
-    app.logger.info(f"Transit data to SUM...")
-    app.logger.debug(f"Data have type of: {type(data)}")
+    logging.info(f"Transit data to SUM...")
+    logging.debug(f"Data have type of: {type(data)}")
     if not isinstance(data, dict):
         data = json.loads(data)
     if data is None:
@@ -211,19 +212,19 @@ def transit_message_from_kafka_to_sum():
         )
     # Проверка наличия флага до валидации. Если True. Не валидировать, не вызывать camunda.
     if data.get("sumIgnore"):
-        app.logger.info("Got sumIgnore flag. Exit transit-message")
+        logging.info("Got sumIgnore flag. Exit transit-message")
         return app.response_class(
             response=json.dumps({"status": "ok"}),
             status=200,
             mimetype="application/json"
         )
     msg = remove_cyrillic(json.dumps(data))
-    app.logger.info("Got a message from kafka")
-    app.logger.debug(f"Message is: {msg}")
+    logging.info("Got a message from kafka")
+    logging.debug(f"Message is: {msg}")
     try:
         validate(data, TRANSIT_MESSAGE_SCHEMA)
     except (ValidationError, SchemaError) as e:
-        app.logger.warning(f"Validation error: {e.message}")
+        logging.warning(f"Validation error: {e.message}")
         return app.response_class(
             response=json.dumps({"status": "error", "message": e.message}),
             status=400,
@@ -259,7 +260,7 @@ def transit_message_from_kafka_to_sum():
             })
     except requests.exceptions.RequestException as err:
         msg = f"Connection error to the comunda servers: {err}"
-        app.logger.warning(msg)
+        logging.warning(msg)
         cache.save_cache(CacheStatus.ServiceUnavailable)
         return app.response_class(
             response=json.dumps({"status": "error", "message": msg}),
@@ -269,7 +270,7 @@ def transit_message_from_kafka_to_sum():
     if req.status_code == 200:
         cache.save_cache(CacheStatus.Ok)
         msg = f"Successful sent the message to SUM. '{req.text}'"
-        app.logger.info(msg)
+        logging.info(msg)
         return app.response_class(
             response=json.dumps({"status": "ok", "message": msg}),
             status=200,
@@ -281,7 +282,7 @@ def transit_message_from_kafka_to_sum():
             f"Request error. Status code: {req.status_code}. Message: "
             f"{req.text}"
         )
-        app.logger.warning(msg)
+        logging.warning(msg)
         return app.response_class(
             response=json.dumps({"status": "error", "message": msg}),
             status=404,
@@ -311,7 +312,7 @@ def sum_resend_cached_message(message_id):
     if req.status_code == 200:
         cache.save_cache(CacheStatus.ResentManually)
         msg = f"Successful resent the message to SUM. '{req.text}'"
-        app.logger.info(msg)
+        logging.info(msg)
         return app.response_class(
             response=json.dumps({"status": "ok", "message": msg}),
             status=200,
@@ -323,7 +324,7 @@ def sum_resend_cached_message(message_id):
             f"Error while resending. Status code: {req.status_code}. Message: "
             f"{req.text}"
         )
-        app.logger.warning(msg)
+        logging.warning(msg)
         return app.response_class(
             response=json.dumps({"status": "error", "message": msg}),
             status=404,

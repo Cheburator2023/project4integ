@@ -3,6 +3,7 @@ import json
 import os
 import random
 import sys
+import logging
 
 import requests
 import time
@@ -28,9 +29,9 @@ class cd:
             self.save_cwd = os.getcwd()
         except Exception as exp:
             self.save_cwd = '/home/user/tmp'
-            app.logger.warning('handled exception os.getcwd, wrote in save_cwd "/home/user/tmp", traceback:')
+            logging.warning('handled exception os.getcwd, wrote in save_cwd "/home/user/tmp", traceback:')
             traceback.print_tb(exp.__traceback__)
-            app.logger.warning((type(exp), exp))
+            logging.warning((type(exp), exp))
         os.chdir(self.path)
 
     def __exit__(self, exc_type, exc_val, exc_tb):
@@ -86,7 +87,7 @@ def upload_many_files_to_jira(issue_key: str, files: dict) -> dict:
             res[filename] = r.json()
         except Exception as exp:
             traceback.print_tb(exp.__traceback__)
-            app.logger.warning((type(exp), exp))
+            logging.warning((type(exp), exp))
             res[filename] = 'an error occured while sending the file'
     return res
 
@@ -138,7 +139,7 @@ def create_zip_archive(files: dict) -> str:
         return zip_path
     except Exception as exp:
         traceback.print_tb(exp.__traceback__)
-        app.logger.warning((type(exp), exp))
+        logging.warning((type(exp), exp))
         raise CreateZipAchiveError
     finally:
         shutil.rmtree(archive_path)
@@ -200,7 +201,7 @@ def _try_to_send_too_large_file(issue_key, filename: str, byte_content: bytes):
         file_size = sys.getsizeof(zip_arch_contents)
         if file_size >= NINE_AND_HALF_MB:
             error_message = f'\nfile {filename} was not attached, because it is too large(should be less than 10 MB), size after compression {file_size}'
-            app.logger.info(error_message)
+            logging.info(error_message)
             edit_issue(issue_key, 'description', error_message)
             res = error_message
         else:
@@ -208,7 +209,7 @@ def _try_to_send_too_large_file(issue_key, filename: str, byte_content: bytes):
             res = r.json()
     except Exception as exp:
         traceback.print_tb(exp.__traceback__)
-        app.logger.warning((type(exp), exp))
+        logging.warning((type(exp), exp))
         remove_if_file_exist(locals().get('path_to_zip_archive', ''))
     else:
         os.remove(path_to_zip_archive)
@@ -236,7 +237,7 @@ def upload_many_files_to_jira_as_zip_archive(issue_key: str, files: dict, name='
         r = upload_file_to_jira(issue_key, zip_name, zip_arch_contents)
     except Exception as exp:
         traceback.print_tb(exp.__traceback__)
-        app.logger.warning((type(exp), exp))
+        logging.warning((type(exp), exp))
         remove_if_file_exist(locals().get('path_to_zip_archive', ''))
         raise JiraUploadManyFilesAsZipError
     else:
@@ -254,7 +255,7 @@ def upload_file_to_jira_as_zip_archive(issue_key: str, filename: str, byte_conte
         r = upload_file_to_jira(issue_key, f"{filename}.zip", zip_arch_contents)
     except Exception as exp:
         traceback.print_tb(exp.__traceback__)
-        app.logger.warning((type(exp), exp))
+        logging.warning((type(exp), exp))
         remove_if_file_exist(locals().get('path_to_zip_archive', ''))
         raise JiraUploadFileAsZipError
     else:

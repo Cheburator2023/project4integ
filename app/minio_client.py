@@ -2,6 +2,7 @@ import io
 import json
 import os
 import re
+import logging
 from abc import ABC, abstractmethod
 from collections import defaultdict
 from dataclasses import dataclass
@@ -108,10 +109,10 @@ class BaseMinioClass(ABC):
             result = self.client.put_object(self.bucket_name, f'{ROOT_FOLDER_NAME}/{object_name}', content,
                                             content_length, part_size=part_size)
         except MaxRetryError as e:
-            app.logger.exception(e)
+            logging.exception(e)
             raise ConnectionToMinioError
         except S3Error as e:
-            app.logger.exception(e)
+            logging.exception(e)
             raise ObjectExistsError
         else:
             return ObjectInfo(result)
@@ -221,7 +222,7 @@ class BaseMinioClass(ABC):
             [DeleteObject(f'{ROOT_FOLDER_NAME}/{object_name}') for object_name in objects_names],
         )
         for error in errors:
-            app.logger.debug(f"error occurred when deleting object {error}")
+            logging.debug(f"error occurred when deleting object {error}")
 
     def remove_repo(self, project_key: str, repo_key: str):
         """Удаление репозитория
@@ -273,10 +274,10 @@ class BaseMinioClass(ABC):
                 CopySource(self.bucket_name, f'{ROOT_FOLDER_NAME}/{object_path_from}', version_id=version_id)
             )
         except S3Error as e:
-            app.logger.exception(e)
+            logging.exception(e)
             raise ObjectExistsError
         except Exception as e:
-            app.logger.exception(e)
+            logging.exception(e)
             raise e
         else:
             return ObjectInfo(result)
@@ -290,9 +291,9 @@ class BaseMinioClass(ABC):
                                                   version_id=version_id)
         except Exception as e:
             if hasattr(e, 'code'):
-                app.logger.debug(f"Object {object_name} do not exist")
+                logging.debug(f"Object {object_name} do not exist")
                 return None
-            app.logger.debug(e)
+            logging.debug(e)
             return None
         if not object_stat:
             return None
@@ -356,7 +357,7 @@ class MinioClientNoneVersioning(BaseMinioClass):
         try:
             return self.client.get_object(self.bucket_name, object_path)
         except S3Error as e:
-            app.logger.exception(e)
+            logging.exception(e)
             raise ObjectNotExistsError
 
     def get_object_version_list(self, object_path: str, object_name: str):
@@ -408,7 +409,7 @@ class MinioClientNativeVersioning(BaseMinioClass):
         )
         errors = self.client.remove_objects(self.bucket_name, delete_object_list)
         for error in errors:
-            app.logger.debug(f"error occurred when deleting object {error}")
+            logging.debug(f"error occurred when deleting object {error}")
 
     def remove_project(self, project_key: str):
         # удалять все версии проектов в репозитории
@@ -422,14 +423,14 @@ class MinioClientNativeVersioning(BaseMinioClass):
         )
         errors = self.client.remove_objects(self.bucket_name, delete_object_list)
         for error in errors:
-            app.logger.debug(f"error occurred when deleting object {error}")
+            logging.debug(f"error occurred when deleting object {error}")
 
     def get_object(self, object_name: str, version_id=None):
         object_path_with_suffix = f'{ROOT_FOLDER_NAME}/{object_name}'
         try:
             return self.client.get_object(self.bucket_name, object_path_with_suffix, version_id=version_id)
         except S3Error as e:
-            app.logger.exception(e)
+            logging.exception(e)
             raise ObjectNotExistsError
 
     def get_object_version_list(self, object_path: str, object_name: str):
@@ -477,7 +478,7 @@ class MinioClientNativeVersioning(BaseMinioClass):
         for item in items:
             name = '/'.join([object_path, object_name])
             self.remove_object(name, version_id=item['version_id'])
-            app.logger.debug(f"object {name} was removed")
+            logging.debug(f"object {name} was removed")
 
     def rollback(self, object_path: str, object_name: str, version_id: str) -> 'ObjectInfo':
         full_object_path = f'{object_path}/{object_name}'
@@ -535,7 +536,7 @@ class MinioClientNativeVersioning(BaseMinioClass):
                     if not object_info.deleted:
                         object_version = object_info.version_id
                         self.remove_object(object_name, version_id=object_version)
-                        app.logger.debug(f"object: {object_name} with version: {object_version} was removed")
+                        logging.debug(f"object: {object_name} with version: {object_version} was removed")
                         object_info.deleted = True
 
         def remove_old(object_versions):
@@ -546,7 +547,7 @@ class MinioClientNativeVersioning(BaseMinioClass):
                     if not object_info.deleted and (current_date - months) > object_info.last_modified:
                         object_version = object_info.version_id
                         self.remove_object(object_name, version_id=object_version)
-                        app.logger.debug(f"object: {object_name} with version: {object_version} was removed")
+                        logging.debug(f"object: {object_name} with version: {object_version} was removed")
                         object_info.deleted = True
 
         # 0b0  - not init
@@ -583,7 +584,7 @@ class MinioClientNativeHCPVersioning(MinioClientNativeVersioning):
         )
         errors = self.client.remove_objects(self.bucket_name, delete_object_list)
         for error in errors:
-            app.logger.debug(f"error occurred when deleting object {error}")
+            logging.debug(f"error occurred when deleting object {error}")
             print(error.code, error.message, error.name, error.version_id)
 
     def remove_project(self, project_key: str):
@@ -600,7 +601,7 @@ class MinioClientNativeHCPVersioning(MinioClientNativeVersioning):
         )
         errors = self.client.remove_objects(self.bucket_name, delete_object_list)
         for error in errors:
-            app.logger.debug(f"error occurred when deleting object {error}")
+            logging.debug(f"error occurred when deleting object {error}")
 
     def remove_old_versions(self, object_path: str, object_name: str):
         raise NotSupportedMethodError
@@ -618,7 +619,7 @@ class MinioClientForeignVersioning(BaseMinioClass):
         try:
             return self.client.get_object(self.bucket_name, object_path_with_suffix)
         except S3Error as e:
-            app.logger.exception(e)
+            logging.exception(e)
             raise ObjectNotExistsError
 
     def get_object_version_list(self, object_path: str, object_name: str):
@@ -658,7 +659,7 @@ class MinioClientForeignVersioning(BaseMinioClass):
         for version_date in items:
             name = '/'.join([object_path, concat_version_name(object_name, version_date)])
             self.remove_object(name)
-            app.logger.debug(f"object {name} was removed")
+            logging.debug(f"object {name} was removed")
 
     def rollback(self, object_path: str, object_name: str, version_id: str):
         orig_file_path = "/".join([object_path, object_name])
@@ -716,7 +717,7 @@ class MinioClientForeignVersioning(BaseMinioClass):
             for version_date in versions[VERSION_STORE_COUNT:]:
                 name = '/'.join([project_key, repo_slug, concat_version_name(object_name, version_date)])
                 self.remove_object(name)
-                app.logger.debug(f"object {name} was removed")
+                logging.debug(f"object {name} was removed")
 
     def clean_versions(self):
         raise NotSupportedMethodError
@@ -728,22 +729,22 @@ def get_minio_client() -> BaseMinioClass:
     if MULTIPART_SIZE:
         try:
             multipart_size = convert_to_bytes(MULTIPART_SIZE)
-            app.logger.info(f"Multipart size set to {multipart_size}")
+            logging.info(f"Multipart size set to {multipart_size}")
         except ValueError:
-            app.logger.warning(f"Can't convert MULTIPART_SIZE: '{MULTIPART_SIZE}' value to bytes, use default value: "
+            logging.warning(f"Can't convert MULTIPART_SIZE: '{MULTIPART_SIZE}' value to bytes, use default value: "
                                f"'{default_multipart_size}'")
             multipart_size = default_multipart_size
         if not (5 * Size.MB <= multipart_size <= 5 * Size.GB):
-            app.logger.warning(
+            logging.warning(
                 f"Can't use multipart_size more then 5GB and less 5MB, use default value: '{default_multipart_size}'")
             multipart_size = default_multipart_size
     else:
-        app.logger.warning(f"MULTIPART_SIZE variable not init, use default value: '{default_multipart_size}'")
+        logging.warning(f"MULTIPART_SIZE variable not init, use default value: '{default_multipart_size}'")
         multipart_size = default_multipart_size
 
     http_client = None  # custom http connection pool
     if SECURE_S3:
-        app.logger.info(f"Try to init http client with secure protocol")
+        logging.info(f"Try to init http client with secure protocol")
         if IGNORE_SSL_VERIFICATION:
             cert_reqs = 'CERT_NONE'  # ignore SSL Verification
         else:
@@ -751,9 +752,9 @@ def get_minio_client() -> BaseMinioClass:
         if os.path.isfile(SSL_CERT_FILE):
             http_client = PoolManager(cert_reqs=cert_reqs, ca_certs=SSL_CERT_FILE)
         else:
-            app.logger.warning(f"Can't find cert file '{SSL_CERT_FILE}'")
+            logging.warning(f"Can't find cert file '{SSL_CERT_FILE}'")
             http_client = PoolManager(cert_reqs=cert_reqs)
-        app.logger.info(f"Http client initialised with '{cert_reqs}'")
+        logging.info(f"Http client initialised with '{cert_reqs}'")
 
     # Типы версионирования
     versioning_types = {
@@ -765,9 +766,9 @@ def get_minio_client() -> BaseMinioClass:
     }
     minio_client = versioning_types.get(VERSIONING.lower())
     if minio_client:
-        app.logger.info(f"Use '{minio_client.__name__}': '{VERSIONING}' versioning")
+        logging.info(f"Use '{minio_client.__name__}': '{VERSIONING}' versioning")
     else:
-        app.logger.warning("Variable 'VERSIONING' type is not set, use 'MinioClientNoneVersioning' as default")
+        logging.warning("Variable 'VERSIONING' type is not set, use 'MinioClientNoneVersioning' as default")
         minio_client = MinioClientNoneVersioning
     client = minio_client(BUCKET_URL, BUCKET_ACCESS_KEY, BUCKET_SECRET_KEY, BUCKET_NAME, BUCKET_REGION, multipart_size,
                           SECURE_S3, http_client)

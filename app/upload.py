@@ -1,5 +1,6 @@
 from app import app
 import os
+import logging
 from flask import Flask, request, redirect, url_for, send_from_directory, abort
 from werkzeug.utils import secure_filename
 from datetime import datetime
@@ -45,7 +46,7 @@ def uploaded_file(filename):
 
 # Upload file to the temp dir on IS:
 def upload_file(filename, rnd_sfx=''):
-    app.logger.info("SUM UPLOAD START upload_file operation: {}".format(datetime.today().strftime("%Y-%m-%d %H:%M:%S")))
+    logging.info("SUM UPLOAD START upload_file operation: {}".format(datetime.today().strftime("%Y-%m-%d %H:%M:%S")))
     #rnd_sfx = ''.join(random.choices(string.ascii_uppercase + string.digits, k=7))
     if "/" in filename:
         # Return 400 BAD REQUEST
@@ -55,7 +56,7 @@ def upload_file(filename, rnd_sfx=''):
     try:
         os.mkdir(path_to_file)
     except FileExistsError:
-        app.logger.warning("Directory {} already exist. Let's use this dir.".format(path_to_file))
+        logging.warning("Directory {} already exist. Let's use this dir.".format(path_to_file))
         pass
 
     if os.path.exists(path_to_file):
@@ -64,21 +65,21 @@ def upload_file(filename, rnd_sfx=''):
                 fp.write(request.data)
         except:
             return {'error': 'error in write operation'}
-    app.logger.info("SUM UPLOAD END upload_file operation: {}".format(datetime.today().strftime("%Y-%m-%d %H:%M:%S")))
+    logging.info("SUM UPLOAD END upload_file operation: {}".format(datetime.today().strftime("%Y-%m-%d %H:%M:%S")))
     return True
 
 
 def upload_file_stream(filename, file_stream, path):
-    app.logger.info(f"SUM UPLOAD START upload_file_stream operation: {utils.get_current_datetime()}")
+    logging.info(f"SUM UPLOAD START upload_file_stream operation: {utils.get_current_datetime()}")
     if "/" in filename:
         abort(400, "no subdirectories directories allowed")
     if os.path.exists(path):
         try:
             file_stream.save(f"{path}/{filename}")
         except Exception as e:
-            app.logger.exception(e)
+            logging.exception(e)
             return {'error': 'error in write operation'}
-    app.logger.info(f"SUM UPLOAD END upload_file_stream operation: {utils.get_current_datetime()}")
+    logging.info(f"SUM UPLOAD END upload_file_stream operation: {utils.get_current_datetime()}")
     return True
 
 # if __name__ == '__main__':

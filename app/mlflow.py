@@ -3,6 +3,7 @@ from app.config import *
 
 from flask import request, json
 import requests
+import logging
 from jsonschema import ValidationError, SchemaError, validate
 from app.data_models import (
     MLFLOW_RUNS_CREATE,
@@ -43,8 +44,8 @@ def get_experiment_by_name(name):
 
     """Get experiment by name"""
     url = f"{mlflow_base_url}/experiments/get-by-name?experiment_name={name}"
-    app.logger.info("Getting experiment by name...")
-    app.logger.debug(url)
+    logging.info("Getting experiment by name...")
+    logging.debug(url)
     r = requests.get(url)
     result = {
         "status_code": r.status_code,
@@ -54,8 +55,8 @@ def get_experiment_by_name(name):
         ),
         "response": r.json()
     }
-    app.logger.debug(result["message"])
-    app.logger.debug(json.dumps(result["response"]))
+    logging.debug(result["message"])
+    logging.debug(json.dumps(result["response"]))
     return result
 
 ### get run by ID START ###
@@ -77,9 +78,9 @@ def get_run(id):
 def get_run_by_experiment(experiment_id):
     url = f"{mlflow_base_url}/runs/search"
     request_data = {'experiment_ids': [experiment_id]}
-    app.logger.info("Getting run by experiment id...")
-    app.logger.debug(url)
-    app.logger.debug(f"Request data is: {json.dumps(request_data)}")
+    logging.info("Getting run by experiment id...")
+    logging.debug(url)
+    logging.debug(f"Request data is: {json.dumps(request_data)}")
     r = requests.post(url, json=request_data)
     result = {
         "status_code": r.status_code,
@@ -89,14 +90,14 @@ def get_run_by_experiment(experiment_id):
         ),
         "response": r.json()
     }
-    app.logger.debug(result["message"])
-    app.logger.debug(json.dumps(result["response"]))
+    logging.debug(result["message"])
+    logging.debug(json.dumps(result["response"]))
     return result
 
 # get experiment id and WINNER run id -- for mlflow address
 @app.route('/mlflow/experiments/<string:experiment_name>/get_model_link')
 def get_model_link(experiment_name):
-    app.logger.info("Getting model link by experiment name...")
+    logging.info("Getting model link by experiment name...")
     result = get_experiment_by_name(experiment_name)
     if result["status_code"] == 200:
         experiment_id = result["response"]["experiment"]["experiment_id"]
@@ -136,7 +137,7 @@ def create_run():
     try:
         validate(request_data, MLFLOW_RUNS_CREATE)
     except (ValidationError, SchemaError) as e:
-        app.logger.warning(f"Validation error: {e.message}")
+        logging.warning(f"Validation error: {e.message}")
         return app.response_class(
             response=json.dumps({"status": "error", "message": e.message}),
             status=400,
@@ -160,7 +161,7 @@ def log_batch():
     try:
         validate(request_data, MLFLOW_LOG_BATCH)
     except (ValidationError, SchemaError) as e:
-        app.logger.warning(f"Validation error: {e.message}")
+        logging.warning(f"Validation error: {e.message}")
         return app.response_class(
             response=json.dumps({"status": "error", "message": e.message}),
             status=400,
@@ -184,7 +185,7 @@ def update_run():
     try:
         validate(request_data, MLFLOW_RUNS_UPDATE)
     except (ValidationError, SchemaError) as e:
-        app.logger.warning(f"Validation error: {e.message}")
+        logging.warning(f"Validation error: {e.message}")
         return app.response_class(
             response=json.dumps({"status": "error", "message": e.message}),
             status=400,
@@ -243,7 +244,7 @@ def get_experiment_by_name_test(name):
 @app.route('/mlflow/experiments/<string:experiment_id>/get_runs_test')
 def get_run_by_experiment_test(experiment_id):
     url = mlflow_test_base_url + '/runs/search'
-    app.logger.info(experiment_id)
+    logging.info(experiment_id)
     request_data = {'experiment_ids': [experiment_id]}
     r = requests.post(url, json=request_data)
     if r.status_code == 200:

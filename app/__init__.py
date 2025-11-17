@@ -1,16 +1,16 @@
 from flask import Flask, jsonify, request, render_template
 from logging.config import dictConfig
 from pathlib import Path
-# from flask_restful import reqparse
-import requests
-# import argparse
+import queue
+from logging.handlers import QueueHandler, QueueListener
 import os
 import functools
+import logging
 from app.config import logging_level, logs_directory
-# import time
-
+from app.tslg_logging import TSLGBufferedSocketHandler, TSLGJSONLogFormatter
 
 from requests.packages.urllib3.exceptions import InsecureRequestWarning
+import requests
 requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
 
 requests.get = functools.partial(requests.get, verify=False)
@@ -21,27 +21,29 @@ os.environ['PYTHONWARNINGS'] = 'ignore:Unverified HTTPS request'
 UPLOAD_FOLDER = '/home/user/tmp'
 NOT_ALLOWED_EXTENSIONS = {'exe', 'ppk'}
 
+# Конфигурация логирования
 log_config = {
     "version": 1,
     "disable_existing_loggers": False,
     "formatters": {
-        "logText": {
-            "format": "[%(asctime)s] [%(process)d] [%(levelname)s] in %(module)s: %(message)s",
-            "datefmt": "%d-%m-%Y %H:%M:%S"
-        },
-        "logJSON": {
-            "()": "app.logging.JSONLogFormatter"
+        "tslg": {
+            "()": "app.tslg_logging.TSLGJSONLogFormatter"
         }
     },
     "handlers": {
-        "wsgi": {
+        "console": {
             "class": "logging.StreamHandler",
             "stream": "ext://flask.logging.wsgi_errors_stream",
-            "formatter": "logText",
+            "formatter": "tslg",
         }
     },
-    "root": {"level": logging_level, "handlers": ["wsgi"]},
+    "root": {
+        "level": logging_level,
+        "handlers": ["console"]
+    },
 }
+
+# Добавляем файловый handler если указана директория для логов
 if logs_directory:
     logs_dir: Path = Path(logs_directory)
     if not logs_dir.exists():
@@ -51,14 +53,50 @@ if logs_directory:
     file_handler = {
         handler_name: {
             "class": "logging.FileHandler",
-            "formatter": "logJSON",
+            "formatter": "tslg",
             "filename": str(log_file_name),
         }
     }
     log_config["handlers"].update(file_handler)
     log_config["root"]["handlers"].append(handler_name)
+
+# Применяем конфигурацию
 dictConfig(log_config)
+
+# Создаем и настраиваем TSLG handler для отправки в сервис логирования
+log_queue = queue.Queue(maxsize=10000)
+
+tslg_handler = TSLGBufferedSocketHandler(
+    host=os.getenv('TSLG_AGENT_HOST', 'tslg-agent-svc-main.dk1-sumd01-sumd-core.svc.cluster.local'),
+    port=int(os.getenv('TSLG_AGENT_PORT', '5170')),
+    max_buffer_size=int(os.getenv('TSLG_MAX_BUFFER_SIZE', '500')),
+    flush_interval_ms=int(os.getenv('TSLG_BUFFER_FLUSH_INTERVAL_MS', '100')),
+    connection_ttl_ms=int(os.getenv('TSLG_CONNECTION_TTL_MS', '2000')),
+    reconnection_delay_ms=int(os.getenv('TSLG_RECONNECTION_DELAY_MS', '2000')),
+    socket_timeout_ms=int(os.getenv('TSLG_SOCKET_TIMEOUT_MS', '5000')),
+    max_connection_attempts=int(os.getenv('TSLG_MAX_CONNECTION_ATTEMPTS', '10'))
+)
+
+# Устанавливаем уровень логирования из env
+tslg_log_level = os.getenv('TSLG_LOG_LEVEL', 'info').upper()
+tslg_handler.setLevel(getattr(logging, tslg_log_level, logging.INFO))
+
+tslg_formatter = TSLGJSONLogFormatter()
+tslg_handler.setFormatter(tslg_formatter)
+
+# Настраиваем асинхронную отправку через очередь
+queue_listener = QueueListener(log_queue, tslg_handler)
+queue_listener.start()
+
+root_logger = logging.getLogger()
+queue_handler = QueueHandler(log_queue)
+root_logger.addHandler(queue_handler)
+
 app = Flask(__name__)
+
+app.logger.info("TSLG logging configured successfully")
+app.logger.info(f"TSLG Agent: {os.getenv('TSLG_AGENT_HOST')}:{os.getenv('TSLG_AGENT_PORT')}")
+app.logger.info(f"Buffer size: {os.getenv('TSLG_MAX_BUFFER_SIZE')}, Flush interval: {os.getenv('TSLG_BUFFER_FLUSH_INTERVAL_MS')}ms")
 
 # To allow flask propagating exception even if debug is set to false on integration_services
 app.config['PROPAGATE_EXCEPTIONS'] = True

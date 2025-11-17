@@ -4,6 +4,7 @@ from app.config import *
 
 from flask import request, json
 import requests
+import logging
 from xml.etree import ElementTree
 from app.k8s import run_k8s_job
 
@@ -28,14 +29,14 @@ def start_build():
     try:
         validate(request_data, TEAMCITY_MODEL_BUILD_START)
     except (ValidationError, SchemaError) as e:
-        app.logger.warning(f"Validation error: {e.message}")
+        logging.warning(f"Validation error: {e.message}")
         return app.response_class(
             response=json.dumps({"status": "error", "message": e.message}),
             status=400,
             mimetype="application/json"
         )
     # TEST 121120 start
-    app.logger.info("JSON of /teamcity/model/build/start request from SUM: {}".format(request_data))
+    logging.info("JSON of /teamcity/model/build/start request from SUM: {}".format(request_data))
     get_mlflow_params = get_model_link(request_data["alias"])
     experiment_id = get_mlflow_params["id"]
     run_id = get_mlflow_params["run"]
@@ -66,7 +67,7 @@ def start_build():
     #return xml
     url = teamcity_base_url_api + '/buildQueue'
     r = requests.post(url, data=xml, headers={'Authorization': 'Basic ' + teamcity_authorization, 'Content-Type': 'application/xml'}) #, verify=False)
-    app.logger.debug(f"response is: {r.text}")
+    logging.debug(f"response is: {r.text}")
     tree = ElementTree.fromstring(r.content)
     xml_to_json = {}
     for element in tree.iter():
@@ -75,7 +76,7 @@ def start_build():
         else:
             for name, value in element.items():
                 xml_to_json[name] = value
-    app.logger.debug(f"result JSON is: {json.dumps(xml_to_json)}")
+    logging.debug(f"result JSON is: {json.dumps(xml_to_json)}")
     if r.status_code == 200:
         return app.response_class(
             response=json.dumps({"status": "ok", "message": xml_to_json}),
@@ -96,7 +97,7 @@ def callback_translate_to_camunda():
     try:
         validate(request_data, TEAMCITY_MODEL_BUILD_STATUS)
     except (ValidationError, SchemaError) as e:
-        app.logger.warning(f"Validation error: {e.message}")
+        logging.warning(f"Validation error: {e.message}")
         return app.response_class(
             response=json.dumps({"status": "error", "message": e.message}),
             status=400,
@@ -114,22 +115,22 @@ def callback_translate_to_camunda():
                              "statusMessage": {"value": request_data["statusMessage"], "type": "string"},
                              "imageSumNexusAddr": {"value": imageSumNexusAddr, "type": "string"}}
     }
-    app.logger.info("SUM teamcity callback request")
-    app.logger.debug("callback_json is: {}".format(json.dumps(request_data)))
-    app.logger.debug("camunda_json is: {}".format(json.dumps(json_data)))
+    logging.info("SUM teamcity callback request")
+    logging.debug("callback_json is: {}".format(json.dumps(request_data)))
+    logging.debug("camunda_json is: {}".format(json.dumps(json_data)))
     url = camunda_base_url_api + '/message'
 
     r = requests.post(url, json=json_data, headers={'Authorization': 'Basic ' + camunda_authorization,  'Content-Type': 'application/json'}) #, verify=False)
 
     if r.status_code == 204:
-        app.logger.info("SUM Camunda request status ok")
+        logging.info("SUM Camunda request status ok")
         return app.response_class(
             response=json.dumps({"status": "ok", "message": ""}),
             status=200,
             mimetype="application/json"
         )
     else:
-        app.logger.error("SUM Camunda request status error, status code is {}".format(r.status_code))
+        logging.error("SUM Camunda request status error, status code is {}".format(r.status_code))
         return app.response_class(
             response=json.dumps({"status": "error", "message": r.content}),
             status=400,
@@ -142,12 +143,12 @@ def callback_translate_to_camunda():
 
 @app.route('/teamcity/model/publish/start', methods=['POST'])
 def start_publish():
-    app.logger.info("TEAMCITY model publish start")
+    logging.info("TEAMCITY model publish start")
     request_data = request.get_json()
     try:
         validate(request_data, TEAMCITY_MODEL_PUBLISH_START)
     except (ValidationError, SchemaError) as e:
-        app.logger.warning(f"Validation error: {e.message}")
+        logging.warning(f"Validation error: {e.message}")
         return app.response_class(
             response=json.dumps({"status": "error", "message": e.message}),
             status=400,
@@ -165,23 +166,23 @@ def start_publish():
                              "imagePimNexusAddr": {"value": imageSumNexusAddr, "type": "string"},
                              "containerCfgPimNexusAddr": {"value": containerCfgBitbucketAddr, "type": "string"}}
     }
-    app.logger.info("SUM direct callback request to camunda")
-    app.logger.debug("JSON from SUM PUBLISH request: {}".format(json.dumps(request_data)))
-    app.logger.debug("camunda_json for STATUS is: {}".format(json.dumps(json_body)))
+    logging.info("SUM direct callback request to camunda")
+    logging.debug("JSON from SUM PUBLISH request: {}".format(json.dumps(request_data)))
+    logging.debug("camunda_json for STATUS is: {}".format(json.dumps(json_body)))
     url = f'{camunda_base_url_api}/message'
     r = requests.post(url, json=json_body, headers={'Authorization': 'Basic ' + camunda_authorization,
                                                     'Content-Type': 'application/json'})  # , verify=False)
-    app.logger.info(f"Camunda status code: {r.status_code}")
-    app.logger.debug(f"Camunda text: {r.text}")
+    logging.info(f"Camunda status code: {r.status_code}")
+    logging.debug(f"Camunda text: {r.text}")
     if r.status_code == 204:
-        app.logger.info("SUM Camunda request status ok")
+        logging.info("SUM Camunda request status ok")
         return app.response_class(
             response=json.dumps({"status": "ok"}),
             status=200,
             mimetype="application/json"
         )
     else:
-        app.logger.error("SUM Camunda request status error, status code is {}".format(r.status_code))
+        logging.error("SUM Camunda request status error, status code is {}".format(r.status_code))
         return app.response_class(
             response=json.dumps({"status": "error"}),
             status=r.status_code,
@@ -192,12 +193,12 @@ def start_publish():
 @app.route('/teamcity/model/publish/status', methods=['POST'])
 def callback_publish_to_camunda():
     #
-    app.logger.warning("WARNING SUM method teamcity/model/publish/status DEPRECATED")
+    logging.warning("WARNING SUM method teamcity/model/publish/status DEPRECATED")
     request_data = request.get_json()
     try:
         validate(request_data, TEAMCITY_MODEL_PUBLISH_STATUS)
     except (ValidationError, SchemaError) as e:
-        app.logger.warning(f"Validation error: {e.message}")
+        logging.warning(f"Validation error: {e.message}")
         return app.response_class(
             response=json.dumps({"status": "error", "message": e.message}),
             status=400,
@@ -211,22 +212,22 @@ def callback_publish_to_camunda():
                              "imagePimNexusAddr": {"value": request_data["imagePimNexusAddr"], "type": "string"},
                              "containerCfgPimNexusAddr": {"value": request_data["containerCfgPimNexusAddr"], "type": "string"}}
         }
-    app.logger.info("SUM teamcity PUBLISH callback request")
-    app.logger.debug("callback_json is: {}".format(json.dumps(request_data)))
-    app.logger.debug("camunda_json is: {}".format(json.dumps(json_body)))
+    logging.info("SUM teamcity PUBLISH callback request")
+    logging.debug("callback_json is: {}".format(json.dumps(request_data)))
+    logging.debug("camunda_json is: {}".format(json.dumps(json_body)))
     url = camunda_base_url_api + '/message'
 
     r = requests.post(url, json=json_body, headers={'Authorization': 'Basic ' + camunda_authorization,  'Content-Type': 'application/json'}) #, verify=False)
 
     if r.status_code == 204:
-        app.logger.info("SUM Camunda request status ok")
+        logging.info("SUM Camunda request status ok")
         return app.response_class(
             response=json.dumps({"status": "ok", "message": ""}),
             status=200,
             mimetype="application/json"
         )
     else:
-        app.logger.error("SUM Camunda request status error, status code is {}".format(r.status_code))
+        logging.error("SUM Camunda request status error, status code is {}".format(r.status_code))
         return app.response_class(
             response=json.dumps({"status": "error", "message": r.content}),
             status=400,
@@ -246,13 +247,13 @@ def start_validation():
     try:
         validate(request_data, TEAMCITY_VALIDATION_START)
     except (ValidationError, SchemaError) as e:
-        app.logger.warning(f"Validation error: {e.message}")
+        logging.warning(f"Validation error: {e.message}")
         return app.response_class(
             response=json.dumps({"status": "error", "message": e.message}),
             status=400,
             mimetype="application/json"
         )
-    app.logger.debug("Teamcity VALIDATION request data is: {}".format(json.dumps(request_data)))
+    logging.debug("Teamcity VALIDATION request data is: {}".format(json.dumps(request_data)))
     # Алиас модели
     model_name, model_version = request_data["alias"].replace("_", "-").split("-")
     # id модели
@@ -287,12 +288,12 @@ def start_validation():
            "MASTERSCALE": scale,
            "callback_url": k8s_callback_url
            }
-    app.logger.info("Data to k8s after remove_cyrillic is : {}".format(remove_cyrillic(str(env))))
+    logging.info("Data to k8s after remove_cyrillic is : {}".format(remove_cyrillic(str(env))))
     try:
         run_k8s_job(env)
         return {"status": "ok"}
     except Exception as e:
-        app.logger.error(e)
+        logging.error(e)
         return app.response_class(
             response=json.dumps({"status": "error", "message": str(e)}),
             status=400,
@@ -306,13 +307,13 @@ def callback_validation_to_camunda():
     try:
         validate(request_data, TEAMCITY_VALIDATION_STATUS)
     except (ValidationError, SchemaError) as e:
-        app.logger.warning(f"Validation error: {e.message}")
+        logging.warning(f"Validation error: {e.message}")
         return app.response_class(
             response=json.dumps({"status": "error", "message": e.message}),
             status=400,
             mimetype="application/json"
         )
-    app.logger.info("callback_json VALIDATION from TeamCity is: {}".format(request_data))
+    logging.info("callback_json VALIDATION from TeamCity is: {}".format(request_data))
     request_data = {
         "messageName": request_data["messageName"],
         "processInstanceId": request_data["processInstanceId"],
@@ -320,21 +321,21 @@ def callback_validation_to_camunda():
                              "first_auto_validation_result": {"value": request_data["first_auto_validation_result"], "type": "string"},
                              "first_auto_validation_report": {"value": request_data["first_auto_validation_report"], "type": "string"}}
         }
-    app.logger.info("SUM teamcity VALIDATION callback request")
-    app.logger.debug("camunda_json VALIDATION is: {}".format(json.dumps(request_data)))
+    logging.info("SUM teamcity VALIDATION callback request")
+    logging.debug("camunda_json VALIDATION is: {}".format(json.dumps(request_data)))
     url = camunda_base_url_api + '/message'
 
     r = requests.post(url, json=request_data, headers={'Authorization': 'Basic ' + camunda_authorization,  'Content-Type': 'application/json'}) #, verify=False)
 
     if r.status_code == 204:
-        app.logger.info("SUM Camunda request status ok")
+        logging.info("SUM Camunda request status ok")
         return app.response_class(
             response=json.dumps({"status": "ok", "message": ""}),
             status=200,
             mimetype="application/json"
         )
     else:
-        app.logger.error("SUM Camunda request status error, status code is {}".format(r.status_code))
+        logging.error("SUM Camunda request status error, status code is {}".format(r.status_code))
         return app.response_class(
             response=json.dumps({"status": "error", "message": r.content}),
             status=400,
