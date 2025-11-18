@@ -1,5 +1,30 @@
 # Semantic Versioning Changelog
 
+# [1.3.0](https://git.sfera.inno.local:7999/SUMD/integration/compare/v1.2.0...v1.3.0) (2025-11-18)
+
+
+### Features
+
+* Добавил TSLG-логирование ([769d2ff](https://git.sfera.inno.local:7999/SUMD/integration/commit/769d2ff0be8ea0472a4d1b3252096c6ee67e8441))
+* Добавил тестовое сообщение ([ce18a96](https://git.sfera.inno.local:7999/SUMD/integration/commit/ce18a96117a7546f12808ecfa0ff5a636e207b59))
+* Добавил тестовое сообщение ([0685678](https://git.sfera.inno.local:7999/SUMD/integration/commit/06856787125e044cabfa1f9ad5bd8cdfacfca92e))
+* Добавлил логи для отладки ([cbec46b](https://git.sfera.inno.local:7999/SUMD/integration/commit/cbec46b7b8d5e05404b708e8b0638067f6f67941))
+* Изменил инициализацию логера ([b8da201](https://git.sfera.inno.local:7999/SUMD/integration/commit/b8da2016aee8669088b75531e17d13f674ca381f))
+* Изменил инициализацию логера ([4ebcfee](https://git.sfera.inno.local:7999/SUMD/integration/commit/4ebcfee923e692dbdbe8e0b5c223aec491c7eb96))
+* Изменил логер во Flask ([7b70415](https://git.sfera.inno.local:7999/SUMD/integration/commit/7b70415f3827297b6c6fadd738770eab9cc99409))
+* Изменил названия файла ([1e529cd](https://git.sfera.inno.local:7999/SUMD/integration/commit/1e529cd4d8e0830d2238a29c3934dd4a91bab88d))
+* Изменил подключение к агенту, добавил логи ([420ceaa](https://git.sfera.inno.local:7999/SUMD/integration/commit/420ceaad549dedbd29d734a9a05ddbb8ae1d34c8))
+* Поправил отправку логов ([1a7ecf8](https://git.sfera.inno.local:7999/SUMD/integration/commit/1a7ecf8b6e8ba37c1d63ebe7cfc6201a8c3c2516))
+* Поправил отправку логов ([057ddf0](https://git.sfera.inno.local:7999/SUMD/integration/commit/057ddf05a5701f3e5f71a0bd387ccaccabdc75c2))
+* Убрал дублирование логов ([6a6a0ac](https://git.sfera.inno.local:7999/SUMD/integration/commit/6a6a0ac0164ac16e2c498368a05e4c1b50938a54))
+* Убрал тестовое сообщение ([74d51d7](https://git.sfera.inno.local:7999/SUMD/integration/commit/74d51d7ae32ae2e641ff2443f58f2ab27dd0400b))
+* Удалил дублирование логов ([adce52d](https://git.sfera.inno.local:7999/SUMD/integration/commit/adce52dc5176d0268c8aedf16770c142fe98fe5f))
+
+
+### Reverts
+
+* Revert "feat: Поправил формат логов" ([5fc6571](https://git.sfera.inno.local:7999/SUMD/integration/commit/5fc65718c115e0efbc56e89f2bc467d05db1d193))
+
 # [1.2.0](https://git.sfera.inno.local/SUMD/integration/compare/v1.1.16...v1.2.0) (2024-08-28)
 
 
