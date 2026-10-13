@@ -9,6 +9,7 @@ from datetime import datetime
 import random
 import re
 
+
 class TSLGBufferedSocketHandler(logging.Handler):
     def __init__(self, host, port, max_buffer_size=500, flush_interval_ms=100,
                  connection_ttl_ms=2000, reconnection_delay_ms=2000,
@@ -197,7 +198,16 @@ class TSLGBufferedSocketHandler(logging.Handler):
                 pass
         super().close()
 
+
 class TSLGJSONLogFormatter(logging.Formatter):
+    """
+    Формирует JSON-запись лога согласно требованиям ИС 1404 Журналирование
+    для приложений appType="PYTHON".
+
+    Расширенный контекст (таблица 4.5.1.3.8 «Требования к ИС 1404»):
+        callerMethod, callerLine, stack, PID, threadName.
+    """
+
     def __init__(self):
         super().__init__()
 
@@ -232,11 +242,11 @@ class TSLGJSONLogFormatter(logging.Formatter):
             'appType': self.app_type,
             'envType': self.env_type,
             'agrType': self.agr_type,
-            'loggerName': record.name,
-            'threadName': record.threadName if hasattr(record, 'threadName') else str(record.thread),
-            'callerClass': record.module,
-            'callerMethod': record.funcName,
+            # Расширенный контекст PYTHON (таблица 4.5.1.3.8)
+            'callerMethod': self._format_caller_method(record),
             'callerLine': record.lineno,
+            'PID': record.process,
+            'threadName': record.threadName if hasattr(record, 'threadName') else str(record.thread),
         }
 
         tec_data = {}
@@ -250,10 +260,6 @@ class TSLGJSONLogFormatter(logging.Formatter):
         if tec_data:
             log_data['tec'] = tec_data
 
-        mdc = self._get_mdc_data(record)
-        if mdc:
-            log_data['mdc'] = mdc
-
         if record.exc_info:
             log_data['stack'] = self.formatException(record.exc_info)
 
@@ -264,6 +270,18 @@ class TSLGJSONLogFormatter(logging.Formatter):
         log_data = {k: v for k, v in log_data.items() if v is not None}
 
         return json.dumps(log_data, ensure_ascii=False)
+
+    @staticmethod
+    def _format_caller_method(record) -> str:
+        """
+        Формирует значение атрибута callerMethod в формате «Модуль. Функция»
+        согласно таблице 4.5.1.3.8 (пример: logging.debug).
+        """
+        module = getattr(record, 'module', '') or ''
+        func_name = getattr(record, 'funcName', '') or ''
+        if module and func_name:
+            return f"{module}.{func_name}"
+        return func_name or module or ''
 
     def _format_message(self, record):
         """Форматирование основного сообщения"""
@@ -276,7 +294,7 @@ class TSLGJSONLogFormatter(logging.Formatter):
         return message
 
     def _sanitize_sensitive_data(self, text):
-        """Улучшенная санитизация чувствительных данных"""
+        """Санитизация чувствительных данных"""
         if not text or not isinstance(text, str):
             return text
 
@@ -299,27 +317,8 @@ class TSLGJSONLogFormatter(logging.Formatter):
 
         return sanitized_text
 
-    def _get_mdc_data(self, record):
-        """Получение MDC данных из record"""
-        mdc = {}
-
-        extra_fields = ['process', 'processName', 'pathname', 'filename']
-        for field in extra_fields:
-            if hasattr(record, field):
-                mdc[field] = getattr(record, field)
-
-        for key, value in record.__dict__.items():
-            if key not in ['args', 'asctime', 'created', 'exc_info', 'exc_text',
-                          'filename', 'funcName', 'levelname', 'levelno', 'lineno',
-                          'module', 'msecs', 'message', 'msg', 'name', 'pathname',
-                          'process', 'processName', 'relativeCreated', 'stack_info',
-                          'thread', 'threadName'] and not key.startswith('_'):
-                mdc[key] = str(value)
-
-        return mdc if mdc else None
-
     def _add_trace_fields(self, log_data, record):
-        """Добавление trace полей"""
+        """Добавление trace полей (агрегационный контекст TRACING)"""
         trace_fields = {}
 
         if not hasattr(record, 'traceId'):

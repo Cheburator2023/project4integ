@@ -6,7 +6,7 @@ from logging.handlers import QueueHandler, QueueListener
 import os
 import functools
 import logging
-from app.config import logging_level, logs_directory
+from app.config import logs_directory, tslg_log_level
 from app.tslg_logging import TSLGBufferedSocketHandler, TSLGJSONLogFormatter
 
 from requests.packages.urllib3.exceptions import InsecureRequestWarning
@@ -20,6 +20,16 @@ requests.put = functools.partial(requests.put, verify=False)
 os.environ['PYTHONWARNINGS'] = 'ignore:Unverified HTTPS request'
 UPLOAD_FOLDER = '/home/user/tmp'
 NOT_ALLOWED_EXTENSIONS = {'exe', 'ppk'}
+
+
+# Единый источник истины для уровня логирования.
+# При неверном значении TSLG_LOG_LEVEL используем INFO (default = info).
+_log_level_name = str(tslg_log_level).strip().upper()
+_resolved_log_level = getattr(logging, _log_level_name, None)
+if not isinstance(_resolved_log_level, int):
+    _log_level_name = 'INFO'
+    _resolved_log_level = logging.INFO
+
 
 # Конфигурация логирования
 log_config = {
@@ -38,7 +48,7 @@ log_config = {
         }
     },
     "root": {
-        "level": logging_level,
+        "level": _log_level_name,
         "handlers": ["console"]
     },
 }
@@ -77,9 +87,9 @@ tslg_handler = TSLGBufferedSocketHandler(
     max_connection_attempts=int(os.getenv('TSLG_MAX_CONNECTION_ATTEMPTS', '10'))
 )
 
-# Устанавливаем уровень логирования из env
-tslg_log_level = os.getenv('TSLG_LOG_LEVEL', 'info').upper()
-tslg_handler.setLevel(getattr(logging, tslg_log_level, logging.INFO))
+# Уровень логирования для TSLG handler — тот же, что и у root-логгера.
+# При TSLG_LOG_LEVEL=info в СС Журналирование передаются INFO и выше.
+tslg_handler.setLevel(_resolved_log_level)
 
 tslg_formatter = TSLGJSONLogFormatter()
 tslg_handler.setFormatter(tslg_formatter)
@@ -97,6 +107,7 @@ app = Flask(__name__)
 app.logger.info("TSLG logging configured successfully")
 app.logger.info(f"TSLG Agent: {os.getenv('TSLG_AGENT_HOST')}:{os.getenv('TSLG_AGENT_PORT')}")
 app.logger.info(f"Buffer size: {os.getenv('TSLG_MAX_BUFFER_SIZE')}, Flush interval: {os.getenv('TSLG_BUFFER_FLUSH_INTERVAL_MS')}ms")
+app.logger.info(f"Log level: {_log_level_name}")
 
 # To allow flask propagating exception even if debug is set to false on integration_services
 app.config['PROPAGATE_EXCEPTIONS'] = True

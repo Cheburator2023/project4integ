@@ -14,7 +14,6 @@ def get_env_bool(name: str, default: bool = False) -> bool:
     return bool(value)
 
 
-logging_level = os.environ.get("logging_level", "INFO")
 logs_directory = os.environ.get("logs_directory", "/app/logs")
 
 ###### NEXUS #################
